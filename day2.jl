@@ -45,7 +45,7 @@ end
 # Convert dictionary of occurences of lowercase letters into 26-dim vector
 function vectorize_dictionary(dict)
     total_chars_among_all_dicts = 26 # number of lowercase letters in english
-    vector = zeros(total_chars_among_all_dicts)
+    vector = zeros(Int64,total_chars_among_all_dicts)
     for key in keys(dict)
         index = Int64(key)-Int64('a')+1
         value = dict[key]
@@ -56,15 +56,43 @@ end
 
 # 1-norm of two vectors
 function manhattan_distance(vector1, vector2)
-    sum(abs(vector2-vector1))
+    sum(abs.(vector2-vector1))
 end
 
 # Solve day2-2
-function find_off_by_one_strings(filename="day2.jl")
+function find_off_by_one_strings(filename="day2.input")
+
+    vectors = []
+    lines = String[]
+    # Creates array of vectors
     file = open(filename)
-    for line in eachline(filename)
-        create_dictionary(line)
-        # TODO
+    for line in eachline(file)
+        push!(lines, line)
+        push!(vectors, vectorize_dictionary(create_dictionary(line)))
+    end
+
+    # Finds indices of vectors that are identical except for 1 character
+    string1_index = -1
+    string2_index = -1
+    for (ind1,vec1) in enumerate(vectors)
+        for (ind2,vec2) in enumerate(vectors)
+            #println(ind1," ", ind2,": ", manhattan_distance(vec1,vec2))
+            if manhattan_distance(vec1, vec2) == 1 || manhattan_distance(vec1, vec2) == 2
+                string1_index = ind1
+                string2_index = ind2
+            end
+        end
+    end
+    if string1_index == -1 || string2_index == -1
+        error("No strings off-by-one!")
+    end
+
+    # Identify substring in common between two strings
+    for i = 1:length(lines[string1_index])
+        if lines[string1_index][i] != lines[string2_index][i]
+            common_substring = lines[string1_index][1:i-1]*lines[string1_index][i+1:end]
+            return common_substring
+        end
     end
 
 end
