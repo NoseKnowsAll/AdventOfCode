@@ -26,6 +26,7 @@ function first_frequency(filename="day1.input")
                 push!(all_shifts, total_shift)
             end
         end
+        close(file)
         iterations += 1
     end
 end
