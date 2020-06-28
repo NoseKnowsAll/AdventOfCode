@@ -22,14 +22,34 @@ function overlap_rects(all_rects)
         end
     end
 
+    # Isolating single ID that does not overlap with any other rects
+    lonesomeIDs = Dict{Int64,Bool}([rect.ID=>true for rect in all_rects]...)
+
+    # Create ID_array
     for rect in all_rects
         for x = rect.left+1:rect.left+rect.width
             for y = rect.top+1:rect.top+rect.height
+                if !isempty(ID_array[x,y])
+                    lonesomeIDs[rect.ID] = false
+                    lonesomeIDs[ID_array[x,y][1]] = false
+                end
                 push!(ID_array[x,y], rect.ID)
             end
         end
     end
-    return ID_array
+
+    # Isolate lonesomeID
+    lonesomeID = -1
+    for key in keys(lonesomeIDs)
+        if lonesomeIDs[key] == true
+            lonesomeID = key
+        end
+    end
+    if lonesomeID == -1
+        error("NO LONESOME ID")
+    end
+
+    return ID_array, lonesomeID
 end
 
 # From ID array, compute total square inches with two or more claims
@@ -53,5 +73,21 @@ function total_overlap_area(filename="day3.input")
     end
     close(file)
 
-    square_inches = compute_overlapping_fabric(overlap_rects(all_rects))
+    ID_array, lonesomeID = overlap_rects(all_rects)
+    square_inches = compute_overlapping_fabric(ID_array)
+end
+
+# Solve day3-2
+function find_nonoverlapping_claim(filename="day3.input")
+    all_rects = Rectangle[]
+    file = open(filename)
+    for line in eachline(file)
+        values = parse_line(line)
+        push!(all_rects, Rectangle(values...))
+    end
+    close(file)
+
+    ID_array, lonesomeID = overlap_rects(all_rects)
+    return lonesomeID
+
 end
