@@ -94,7 +94,6 @@ function solve_day3_1(n=10000,filename="day3.input")
     while !finished
         try
             grid = initialize_grid(n,filename)
-            display(grid)
             (min_distance, min_location) = find_min_distance(grid)
             finished = true
             println("final n needed = ", n)
