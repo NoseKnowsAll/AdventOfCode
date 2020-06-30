@@ -68,6 +68,7 @@ struct Instruction
         if MAX_INSTRUCTION < Int(opcode_) && opcode_ != halt
             opcode_ = unknown
         end
+
         length_ = length(opcode_)
         instr_digits = digits(relevant_program[1], pad=length_)
         modes_ = instr_digits[OPCODE_LENGTH+1:end]
@@ -83,6 +84,7 @@ struct Instruction
         else
             true_opcode = OpCode(opcode_)
         end
+
         length_ = length(true_opcode)
         instr_digits = digits(relevant_program[1], pad=length_+1)
         modes_ = instr_digits[OPCODE_LENGTH+1:end]
@@ -107,11 +109,10 @@ function interpret_instruction(program, index)
 end
 
 # Modify program by evaluating instruction
-function eval_instruction!(program, instruction::Instruction)
+function eval_instruction!(program, instruction::Instruction; input_value=0)
     global MAX_INSTRUCTION
 
     if instruction.opcode == add
-        println(instruction)
         val1 = 0
         if instruction.modes[1] == Int(position)
             val1 = program[instruction.parameters[1]+1] # ZERO-INDEXED INPUT
@@ -134,11 +135,13 @@ function eval_instruction!(program, instruction::Instruction)
         program[val3] = val1+val2
 
     elseif instruction.opcode == multiply
+        val1 = 0
         if instruction.modes[1] == Int(position)
             val1 = program[instruction.parameters[1]+1] # ZERO-INDEXED INPUT
         elseif instruction.modes[1] == Int(immediate)
             val1 = instruction.parameters[1]
         end
+        val2 = 0
         if instruction.modes[2] == Int(position)
             val2 = program[instruction.parameters[2]+1] # ZERO-INDEXED INPUT
         elseif instruction.modes[2] == Int(immediate)
@@ -146,7 +149,7 @@ function eval_instruction!(program, instruction::Instruction)
         end
         val3 = instruction.parameters[3]+1 # ZERO-INDEXED INPUT
         if instruction.modes[3] != Int(position)
-            error("adding to a value, not location")
+            error("multiplying to a value, not location")
             return IMMEDIATE_WRITE_ERROR
         end
 
@@ -154,8 +157,24 @@ function eval_instruction!(program, instruction::Instruction)
         program[val3] = val1*val2
 
     elseif instruction.opcode == input && MAX_INSTRUCTION >= Int(input) # input
+        val1 = instruction.parameters[1]+1 # ZERO-INDEXED INPUT
+        if instruction.modes[1] != Int(position)
+            error("inputting to a value, not location")
+        end
+
+        # Actually input
+        program[val1] = input_value
 
     elseif instruction.opcode == output && MAX_INSTRUCTION >= Int(output) # output
+        output_value = 0
+        if instruction.modes[1] == Int(position)
+            output_value = program[instruction.parameters[1]+1] # ZERO-INDEXED INPUT
+        elseif instruction.modes[1] == Int(immediate)
+            output_value = instruction.parameters[1]
+        end
+
+        # Actually output
+        println("output = $output_value")
 
     else
         # an uknown opcode. Not necessarily an error
@@ -172,10 +191,18 @@ function initialize_program(string)
 end
 
 # Actually evaluates the opcode program, updating program as it runs
-function interpret_program!(program)
+function interpret_program!(program; input_value=0)
     index = 1
+    # Handle input if necessary
     instruction = interpret_instruction(program, index)
+    if instruction.opcode == input
+        eval_instruction!(program, instruction, input_value=input_value)
 
+        index += instruction.length
+        instruction = interpret_instruction(program, index)
+    end
+
+    # Run program until it halts
     while instruction.opcode != halt
         error_code = eval_instruction!(program, instruction)
         if error_code != SUCCESS
