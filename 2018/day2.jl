@@ -1,7 +1,6 @@
 # dict::Dict{Char, Int64} matches characters to number of occurences
 function create_dictionary(string)
     dict = Dict{Char, Int64}()
-    println(string)
     for char in string
         previous_value = get!(dict, char, 0)
         dict[char] += 1
@@ -32,14 +31,12 @@ end
 function checksum(filename = "day2.input")
     total_doubles = 0
     total_triples = 0
-    file = open(filename)
     for line in eachline(filename)
         (doubles, triples) = count_repeated_digits(line)
 
         total_doubles += doubles ? 1 : 0
         total_triples += triples ? 1 : 0
     end
-    close(file)
     return total_doubles*total_triples
 end
 
@@ -66,12 +63,10 @@ function find_off_by_one_strings(filename="day2.input")
     vectors = []
     lines = String[]
     # Creates array of vectors
-    file = open(filename)
-    for line in eachline(file)
+    for line in eachline(filename)
         push!(lines, line)
         push!(vectors, vectorize_dictionary(create_dictionary(line)))
     end
-    close(file)
 
     # Finds indices of vectors that are identical except for 1 character
     string1_index = -1

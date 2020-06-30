@@ -66,12 +66,10 @@ end
 # Solve day3-1
 function total_overlap_area(filename="day3.input")
     all_rects = Rectangle[]
-    file = open(filename)
-    for line in eachline(file)
+    for line in eachline(filename)
         values = parse_line(line)
         push!(all_rects, Rectangle(values...))
     end
-    close(file)
 
     ID_array, lonesomeID = overlap_rects(all_rects)
     square_inches = compute_overlapping_fabric(ID_array)
@@ -80,12 +78,10 @@ end
 # Solve day3-2
 function find_nonoverlapping_claim(filename="day3.input")
     all_rects = Rectangle[]
-    file = open(filename)
-    for line in eachline(file)
+    for line in eachline(filename)
         values = parse_line(line)
         push!(all_rects, Rectangle(values...))
     end
-    close(file)
 
     ID_array, lonesomeID = overlap_rects(all_rects)
     return lonesomeID

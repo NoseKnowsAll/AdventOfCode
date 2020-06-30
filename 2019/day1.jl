@@ -15,8 +15,7 @@ end
 # Solve day1-1
 function fuel_requirement(filename="day1.input")
     total_fuel = 0
-    file = open(filename)
-    for line in eachline(file)
+    for line in eachline(filename)
         total_fuel += compute_fuel(parse(Int64, line))
     end
     return total_fuel
@@ -25,8 +24,7 @@ end
 # Solve day1-2
 function fuel_requirement2(filename="day1.input")
     total_fuel = 0
-    file = open(filename)
-    for line in eachline(file)
+    for line in eachline(filename)
         total_fuel += compute_total_fuel(parse(Int64, line))
     end
     return total_fuel
