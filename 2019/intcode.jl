@@ -1,6 +1,7 @@
 module IntCode
 
 export OpCode
+export Program
 export Instruction
 export initialize_program, interpret_program!
 
@@ -61,13 +62,23 @@ function Base.length(opcode::OpCode)
     end
 end
 
+# Struct containing the all the information about the raw program
+mutable struct Program
+    program::Array{Int64}
+    pointer::Integer
+end
+
+function Base.show(io::IO, program::Program)
+    print(io, "Program{@$(program.pointer) of $(program.program)}")
+end
+
 # Mode of a given parameter
 @enum Modes begin
     position=0  # interpret parameter as address
     immediate=1 # interpret parameter as value
 end
 
-# Struct containing all the information about the current instruction
+# Struct containing all the information about a specific instruction
 struct Instruction
     opcode::OpCode
     length::Integer
@@ -113,18 +124,19 @@ function Base.show(io::IO, instruction::Instruction)
 end
 
 # Extracts information from instruction
-function interpret_instruction(program, index)
-    instr_digits = digits(program[index], pad=OPCODE_LENGTH)
+function interpret_instruction(program::Program)
+    index = program.pointer
+    instr_digits = digits(program.program[index], pad=OPCODE_LENGTH)
     opcode = sum([instr_digits[k]*10^(k-1) for k = 1:OPCODE_LENGTH])
-    relevant_program = program[index:index+length(OpCode(opcode))-1]
+    relevant_program = program.program[index:index+length(OpCode(opcode))-1]
     return Instruction(opcode, relevant_program)
 end
 
 # Helper function to retrieve the value specified by instruction mode/param at index
-function retrieve_value(program, instruction::Instruction, index)
+function retrieve_value(program::Program, instruction::Instruction, index)
     value = 0
     if instruction.modes[index] == Int(position)
-        value = program[instruction.parameters[index]+1] # ZERO-INDEXED INPUT
+        value = program.program[instruction.parameters[index]+1] # ZERO-INDEXED INPUT
     elseif instruction.modes[index] == Int(immediate)
         value = instruction.parameters[index]
     end
@@ -133,7 +145,7 @@ end
 
 # Helper function to retrieve the value specified by instruction mode/param at index
 # but does not allow for immediate mode
-function retrieve_value_no_immediate(program, instruction::Instruction, index)
+function retrieve_value_no_immediate(instruction::Instruction, index)
     value = instruction.parameters[index]+1 # ZERO-INDEXED INPUT
     if instruction.modes[index] != Int(position)
         error("$(instruction.opcode)ing to a value, not location")
@@ -143,54 +155,98 @@ function retrieve_value_no_immediate(program, instruction::Instruction, index)
 end
 
 # Evaluate add instruction, updating program
-function eval_add!(program, instruction::Instruction)
+function eval_add!(program::Program, instruction::Instruction)
     val1 = retrieve_value(program, instruction, 1)
     val2 = retrieve_value(program, instruction, 2)
-    val3 = retrieve_value_no_immediate(program, instruction, 3)
+    val3 = retrieve_value_no_immediate(instruction, 3)
     if val3 < 0
         return val3 # Could be error code
     end
 
     # Actually add
-    program[val3] = val1+val2
+    program.program[val3] = val1+val2
     return SUCCESS
 end
 
 # Evaluate multiply instruction, updating program
-function eval_multiply!(program, instruction::Instruction)
+function eval_multiply!(program::Program, instruction::Instruction)
     val1 = retrieve_value(program, instruction, 1)
     val2 = retrieve_value(program, instruction, 2)
-    val3 = retrieve_value_no_immediate(program, instruction, 3)
+    val3 = retrieve_value_no_immediate(instruction, 3)
     if val3 < 0
         return val3 # Could be error code
     end
 
     # Actually multiply
-    program[val3] = val1*val2
+    program.program[val3] = val1*val2
     return SUCCESS
 end
 
 # Evaluate input instruction, updating program
-function eval_input!(program, instruction::Instruction, input_value)
-    val1 = retrieve_value_no_immediate(program, instruction, 1)
+function eval_input!(program::Program, instruction::Instruction, input_value)
+    val1 = retrieve_value_no_immediate(instruction, 1)
     if val1 < 0
         return val1 # Could be error code
     end
 
     # Actually input
-    program[val1] = input_value
+    program.program[val1] = input_value
 end
 
 # Evaluate output instruction
-function eval_output(program, instruction::Instruction)
+function eval_output(program::Program, instruction::Instruction)
     output_value = retrieve_value(program, instruction, 1)
 
     # Actually output
     println("output = $output_value")
 end
 
+# Evaluate jump_if_true instruction, updating program pointer
+function eval_jump_if_true!(program::Program, instruction::Instruction)
+    val1 = retrieve_value(program, instruction, 1)
+    val2 = retrieve_value(program, instruction, 2)
+
+    if val1 != 0
+        program.pointer = val2
+    end # else do nothing
+end
+
+# Evaluate jump_if_false instruction, updating program pointer
+function eval_jump_if_false!(program::Program, instruction::Instruction)
+    val1 = retrieve_value(program, instruction, 1)
+    val2 = retrieve_value(program, instruction, 2)
+
+    if val1 == 0
+        program.pointer = val2
+    end # else do nothing
+end
+
+# Evaluate less_than instruction, updating program
+function eval_less_than!(program::Program, instruction::Instruction)
+    val1 = retrieve_value(program, instruction, 1)
+    val2 = retrieve_value(program, instruction, 2)
+    val3 = retrieve_value_no_immediate(instruction, 3)
+    if val3 < 0
+        return val3 # Could be error code
+    end
+
+    program.program[val3] = (val1 < val2) ? 1 : 0
+end
+
+# Evaluate equals instruction, updating program
+function equals!(program::Program, instruction::Instruction)
+    val1 = retrieve_value(program, instruction, 1)
+    val2 = retrieve_value(program, instruction, 2)
+    val3 = retrieve_value_no_immediate(instruction, 3)
+    if val3 < 0
+        return val3 # Could be error code
+    end
+
+    program.program[val3] = (val1 == val2) ? 1 : 0
+end
+
 # Modify program by evaluating instruction
-function eval_instruction!(program, instruction::Instruction; input_value=0)
+function eval_instruction!(program::Program, instruction::Instruction; input_value=0)
     global MAX_INSTRUCTION
 
     if instruction.opcode == add
@@ -202,17 +258,13 @@ function eval_instruction!(program, instruction::Instruction; input_value=0)
     elseif instruction.opcode == output && MAX_INSTRUCTION >= Int(output)
         eval_output(program, instruction)
     elseif instruction.opcode == jump_if_true && MAX_INSTRUCTION >= Int(jump_if_true)
-        # jump_if_true instruction
-
+        eval_jump_if_true!(program, instruction)
     elseif instruction.opcode == jump_if_false && MAX_INSTRUCTION >= Int(jump_if_false)
-         # jump_if_false instruction
-
+        eval_jump_if_false!(program, instruction)
     elseif instruction.opcode == less_than && MAX_INSTRUCTION >= Int(less_than)
-        # less_than instruction
-
+        eval_less_than!(program, instruction)
     elseif instruction.opcode == equals && MAX_INSTRUCTION >= Int(equals)
-        # equals instruction
-
+        eval_equals!(program, instruction)
     else
         # an uknown opcode. Not necessarily an error
         return INVALID_OPCODE
@@ -223,20 +275,20 @@ end
 # Reinterprets the string from the file as an array of integers to run as a program
 function initialize_program(string)
     array_string = split(string,',')
-    program = parse.(Int64,array_string)
-    return program
+    program_code = parse.(Int64,array_string)
+    init_index = 1
+    return Program(program_code, init_index)
 end
 
 # Actually evaluates the opcode program, updating program as it runs
-function interpret_program!(program; input_value=0)
-    index = 1
+function interpret_program!(program::Program; input_value=0)
     # Handle input if necessary
-    instruction = interpret_instruction(program, index)
+    instruction = interpret_instruction(program)
     if instruction.opcode == input
         eval_instruction!(program, instruction, input_value=input_value)
 
-        index += instruction.length
-        instruction = interpret_instruction(program, index)
+        program.pointer += instruction.length
+        instruction = interpret_instruction(program)
     end
 
     # Run program until it halts
@@ -247,8 +299,8 @@ function interpret_program!(program; input_value=0)
         end
 
         # Setup for next instruction
-        index += instruction.length
-        instruction = interpret_instruction(program,index)
+        program.pointer += instruction.length
+        instruction = interpret_instruction(program)
     end
     return SUCCESS
 end

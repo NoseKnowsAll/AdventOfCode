@@ -11,10 +11,10 @@ function restore_gravity(filename="day2.input")
 
     program = IntCode.initialize_program(string)
     # 1202 program:
-    program[2] = 12
-    program[3] = 2
+    program.program[2] = 12
+    program.program[3] = 2
     IntCode.interpret_program!(program)
-    return program[1]
+    return program.program[1]
 end
 
 # Solve day2-2
@@ -29,11 +29,11 @@ function determine_input(filename="day2.input")
     for noun = 0:99
         for verb = 0:99
             program = deepcopy(master_program)
-            program[2] = noun
-            program[3] = verb
+            program.program[2] = noun
+            program.program[3] = verb
             error_code = IntCode.interpret_program!(program)
             if error_code == 0 # Sucessful completion
-                if program[1] == 19690720 # SECRET NUMBER
+                if program.program[1] == 19690720 # SECRET NUMBER
                     return 100*noun+verb
                 end
             end
