@@ -10,6 +10,10 @@ export initialize_program, interpret_program!
     multiply=2
     input=3
     output=4
+    jump_if_true=5
+    jump_if_false=6
+    less_than=7
+    equals=8
     halt=99
     unknown=-1
 end
@@ -42,6 +46,14 @@ function Base.length(opcode::OpCode)
         return 2
     elseif opcode == output && MAX_INSTRUCTION >= Int(output)
         return 2
+    elseif opcode == jump_if_true && MAX_INSTRUCTION >= Int(jump_if_true)
+        return 3
+    elseif opcode == jump_if_false && MAX_INSTRUCTION >= Int(jump_if_false)
+        return 3
+    elseif opcode == less_than && MAX_INSTRUCTION >= Int(less_than)
+        return 4
+    elseif opcode == equals && MAX_INSTRUCTION >= Int(equals)
+        return 4
     elseif opcode == halt
         return 1
     else # Unrecognized opcode
@@ -108,73 +120,98 @@ function interpret_instruction(program, index)
     return Instruction(opcode, relevant_program)
 end
 
+# Helper function to retrieve the value specified by instruction mode/param at index
+function retrieve_value(program, instruction::Instruction, index)
+    value = 0
+    if instruction.modes[index] == Int(position)
+        value = program[instruction.parameters[index]+1] # ZERO-INDEXED INPUT
+    elseif instruction.modes[index] == Int(immediate)
+        value = instruction.parameters[index]
+    end
+    return value
+end
+
+# Helper function to retrieve the value specified by instruction mode/param at index
+# but does not allow for immediate mode
+function retrieve_value_no_immediate(program, instruction::Instruction, index)
+    value = instruction.parameters[index]+1 # ZERO-INDEXED INPUT
+    if instruction.modes[index] != Int(position)
+        error("$(instruction.opcode)ing to a value, not location")
+        return IMMEDIATE_WRITE_ERROR
+    end
+    return value
+end
+
+# Evaluate add instruction, updating program
+function eval_add!(program, instruction::Instruction)
+    val1 = retrieve_value(program, instruction, 1)
+    val2 = retrieve_value(program, instruction, 2)
+    val3 = retrieve_value_no_immediate(program, instruction, 3)
+    if val3 < 0
+        return val3 # Could be error code
+    end
+
+    # Actually add
+    program[val3] = val1+val2
+    return SUCCESS
+end
+
+# Evaluate multiply instruction, updating program
+function eval_multiply!(program, instruction::Instruction)
+    val1 = retrieve_value(program, instruction, 1)
+    val2 = retrieve_value(program, instruction, 2)
+    val3 = retrieve_value_no_immediate(program, instruction, 3)
+    if val3 < 0
+        return val3 # Could be error code
+    end
+
+    # Actually multiply
+    program[val3] = val1*val2
+    return SUCCESS
+end
+
+# Evaluate input instruction, updating program
+function eval_input!(program, instruction::Instruction, input_value)
+    val1 = retrieve_value_no_immediate(program, instruction, 1)
+    if val1 < 0
+        return val1 # Could be error code
+    end
+
+    # Actually input
+    program[val1] = input_value
+end
+
+# Evaluate output instruction
+function eval_output(program, instruction::Instruction)
+    output_value = retrieve_value(program, instruction, 1)
+
+    # Actually output
+    println("output = $output_value")
+end
+
 # Modify program by evaluating instruction
 function eval_instruction!(program, instruction::Instruction; input_value=0)
     global MAX_INSTRUCTION
 
     if instruction.opcode == add
-        val1 = 0
-        if instruction.modes[1] == Int(position)
-            val1 = program[instruction.parameters[1]+1] # ZERO-INDEXED INPUT
-        elseif instruction.modes[1] == Int(immediate)
-            val1 = instruction.parameters[1]
-        end
-        val2 = 0
-        if instruction.modes[2] == Int(position)
-            val2 = program[instruction.parameters[2]+1] # ZERO-INDEXED INPUT
-        elseif instruction.modes[2] == Int(immediate)
-            val2 = instruction.parameters[2]
-        end
-        val3 = instruction.parameters[3]+1 # ZERO-INDEXED INPUT
-        if instruction.modes[3] != Int(position)
-            error("adding to a value, not location")
-            return IMMEDIATE_WRITE_ERROR
-        end
-
-        # Actually add
-        program[val3] = val1+val2
-
+        eval_add!(program, instruction)
     elseif instruction.opcode == multiply
-        val1 = 0
-        if instruction.modes[1] == Int(position)
-            val1 = program[instruction.parameters[1]+1] # ZERO-INDEXED INPUT
-        elseif instruction.modes[1] == Int(immediate)
-            val1 = instruction.parameters[1]
-        end
-        val2 = 0
-        if instruction.modes[2] == Int(position)
-            val2 = program[instruction.parameters[2]+1] # ZERO-INDEXED INPUT
-        elseif instruction.modes[2] == Int(immediate)
-            val2 = instruction.parameters[2]
-        end
-        val3 = instruction.parameters[3]+1 # ZERO-INDEXED INPUT
-        if instruction.modes[3] != Int(position)
-            error("multiplying to a value, not location")
-            return IMMEDIATE_WRITE_ERROR
-        end
+        eval_multiply!(program, instruction)
+    elseif instruction.opcode == input && MAX_INSTRUCTION >= Int(input)
+        eval_input!(program, instruction, input_value)
+    elseif instruction.opcode == output && MAX_INSTRUCTION >= Int(output)
+        eval_output(program, instruction)
+    elseif instruction.opcode == jump_if_true && MAX_INSTRUCTION >= Int(jump_if_true)
+        # jump_if_true instruction
 
-        # Actually multiply
-        program[val3] = val1*val2
+    elseif instruction.opcode == jump_if_false && MAX_INSTRUCTION >= Int(jump_if_false)
+         # jump_if_false instruction
 
-    elseif instruction.opcode == input && MAX_INSTRUCTION >= Int(input) # input
-        val1 = instruction.parameters[1]+1 # ZERO-INDEXED INPUT
-        if instruction.modes[1] != Int(position)
-            error("inputting to a value, not location")
-        end
+    elseif instruction.opcode == less_than && MAX_INSTRUCTION >= Int(less_than)
+        # less_than instruction
 
-        # Actually input
-        program[val1] = input_value
-
-    elseif instruction.opcode == output && MAX_INSTRUCTION >= Int(output) # output
-        output_value = 0
-        if instruction.modes[1] == Int(position)
-            output_value = program[instruction.parameters[1]+1] # ZERO-INDEXED INPUT
-        elseif instruction.modes[1] == Int(immediate)
-            output_value = instruction.parameters[1]
-        end
-
-        # Actually output
-        println("output = $output_value")
+    elseif instruction.opcode == equals && MAX_INSTRUCTION >= Int(equals)
+        # equals instruction
 
     else
         # an uknown opcode. Not necessarily an error
