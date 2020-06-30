@@ -25,7 +25,7 @@ global MAX_INSTRUCTION
 MAX_INSTRUCTION = Int(halt)
 
 # Number of digits that compose the opcode
-OPCODE_LENGTH = 2
+OPCODE_DIGITS = 2
 
 # Successful completion of program
 SUCCESS = 0
@@ -94,7 +94,7 @@ struct Instruction
 
         length_ = length(opcode_)
         instr_digits = digits(relevant_program[1], pad=length_)
-        modes_ = instr_digits[OPCODE_LENGTH+1:end]
+        modes_ = instr_digits[OPCODE_DIGITS+1:end]
         parameters_ = relevant_program[2:length_]
         new(opcode_, length_, modes_, parameters_)
     end
@@ -110,7 +110,7 @@ struct Instruction
 
         length_ = length(true_opcode)
         instr_digits = digits(relevant_program[1], pad=length_+1)
-        modes_ = instr_digits[OPCODE_LENGTH+1:end]
+        modes_ = instr_digits[OPCODE_DIGITS+1:end]
         parameters_ = relevant_program[2:length_]
         new(true_opcode, length_, modes_, parameters_)
     end
@@ -126,8 +126,9 @@ end
 # Extracts information from instruction
 function interpret_instruction(program::Program)
     index = program.pointer
-    instr_digits = digits(program.program[index], pad=OPCODE_LENGTH)
-    opcode = sum([instr_digits[k]*10^(k-1) for k = 1:OPCODE_LENGTH])
+    instr_digits = digits(program.program[index], pad=OPCODE_DIGITS)
+    opcode = sum([instr_digits[k]*10^(k-1) for k = 1:OPCODE_DIGITS])
+    #TODO: This fails if opcode isn't one that's recognized...
     relevant_program = program.program[index:index+length(OpCode(opcode))-1]
     return Instruction(opcode, relevant_program)
 end
@@ -191,6 +192,7 @@ function eval_input!(program::Program, instruction::Instruction, input_value)
 
     # Actually input
     program.program[val1] = input_value
+    return SUCCESS
 end
 
 # Evaluate output instruction
@@ -199,6 +201,7 @@ function eval_output(program::Program, instruction::Instruction)
 
     # Actually output
     println("output = $output_value")
+    return SUCCESS
 end
 
 # Evaluate jump_if_true instruction, updating program pointer
@@ -207,8 +210,10 @@ function eval_jump_if_true!(program::Program, instruction::Instruction)
     val2 = retrieve_value(program, instruction, 2)
 
     if val1 != 0
-        program.pointer = val2
+        program.pointer = val2+1 # ZERO-INDEXED INPUT
+        program.pointer -= instruction.length # in expectation of moving it forward
     end # else do nothing
+    return SUCCESS
 end
 
 # Evaluate jump_if_false instruction, updating program pointer
@@ -217,8 +222,10 @@ function eval_jump_if_false!(program::Program, instruction::Instruction)
     val2 = retrieve_value(program, instruction, 2)
 
     if val1 == 0
-        program.pointer = val2
+        program.pointer = val2+1 # ZERO-INDEXED INPUT
+        program.pointer -= instruction.length # in expectation of moving it forward
     end # else do nothing
+    return SUCCESS
 end
 
 # Evaluate less_than instruction, updating program
@@ -231,10 +238,11 @@ function eval_less_than!(program::Program, instruction::Instruction)
     end
 
     program.program[val3] = (val1 < val2) ? 1 : 0
+    return SUCCESS
 end
 
 # Evaluate equals instruction, updating program
-function equals!(program::Program, instruction::Instruction)
+function eval_equals!(program::Program, instruction::Instruction)
     val1 = retrieve_value(program, instruction, 1)
     val2 = retrieve_value(program, instruction, 2)
     val3 = retrieve_value_no_immediate(instruction, 3)
@@ -243,6 +251,7 @@ function equals!(program::Program, instruction::Instruction)
     end
 
     program.program[val3] = (val1 == val2) ? 1 : 0
+    return SUCCESS
 end
 
 # Modify program by evaluating instruction
@@ -250,21 +259,21 @@ function eval_instruction!(program::Program, instruction::Instruction; input_val
     global MAX_INSTRUCTION
 
     if instruction.opcode == add
-        eval_add!(program, instruction)
+        return eval_add!(program, instruction)
     elseif instruction.opcode == multiply
-        eval_multiply!(program, instruction)
+        return eval_multiply!(program, instruction)
     elseif instruction.opcode == input && MAX_INSTRUCTION >= Int(input)
-        eval_input!(program, instruction, input_value)
+        return eval_input!(program, instruction, input_value)
     elseif instruction.opcode == output && MAX_INSTRUCTION >= Int(output)
-        eval_output(program, instruction)
+        return eval_output(program, instruction)
     elseif instruction.opcode == jump_if_true && MAX_INSTRUCTION >= Int(jump_if_true)
-        eval_jump_if_true!(program, instruction)
+        return eval_jump_if_true!(program, instruction)
     elseif instruction.opcode == jump_if_false && MAX_INSTRUCTION >= Int(jump_if_false)
-        eval_jump_if_false!(program, instruction)
+        return eval_jump_if_false!(program, instruction)
     elseif instruction.opcode == less_than && MAX_INSTRUCTION >= Int(less_than)
-        eval_less_than!(program, instruction)
+        return eval_less_than!(program, instruction)
     elseif instruction.opcode == equals && MAX_INSTRUCTION >= Int(equals)
-        eval_equals!(program, instruction)
+        return eval_equals!(program, instruction)
     else
         # an uknown opcode. Not necessarily an error
         return INVALID_OPCODE
@@ -285,21 +294,25 @@ function interpret_program!(program::Program; input_value=0)
     # Handle input if necessary
     instruction = interpret_instruction(program)
     if instruction.opcode == input
-        eval_instruction!(program, instruction, input_value=input_value)
-
+        error_code = eval_instruction!(program, instruction, input_value=input_value)
+        if error_code != SUCCESS
+            return error_code
+        end
         program.pointer += instruction.length
+
         instruction = interpret_instruction(program)
     end
 
     # Run program until it halts
     while instruction.opcode != halt
+        # println(program); flush(stdout) # debugging
         error_code = eval_instruction!(program, instruction)
         if error_code != SUCCESS
             return error_code
         end
+        program.pointer += instruction.length
 
         # Setup for next instruction
-        program.pointer += instruction.length
         instruction = interpret_instruction(program)
     end
     return SUCCESS
