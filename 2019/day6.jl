@@ -60,3 +60,59 @@ function orbits_in_map_data(filename="day6.input")
     total_orbits = compute_orbits!(graph_dict)
     return total_orbits
 end
+
+# Helper function to perform depth first search recursively
+function recursive_path(graph_dict, path_so_far, to_find)
+    to_explore = path_so_far[end]
+    if to_explore == to_find
+        return true
+    end
+
+    for moon in graph_dict[to_explore].moons
+        push!(path_so_far, moon)
+        found = recursive_path(graph_dict, path_so_far, to_find)
+        if found
+            return true
+        else
+            pop!(path_so_far)
+        end
+    end
+    return false
+end
+
+# Returns an array of the planets to go from COM to planet_name
+function path_to_planet(graph_dict, planet_name)
+    path_so_far = ["COM"]
+    found = recursive_path(graph_dict, path_so_far, planet_name)
+    if !found
+        error("No path found to $(planet_name)!")
+    end
+    return path_so_far
+end
+
+# Computes the number of orbital transfers from planet_from to planet_to
+function compute_transfers(graph_dict, planet_from, planet_to)
+    path_from = path_to_planet(graph_dict, planet_from)
+    pop!(path_from) # Only care about orbital transfers, not direct path
+    path_to = path_to_planet(graph_dict, planet_to)
+    pop!(path_to) # Only care about orbital transfers, not direct path
+
+    # Compute the maximum index along both paths that is in common between them
+    index = 1
+    while index <= length(path_from) && index <= length(path_to)
+        if path_from[index] != path_to[index]
+            break
+        end
+        index+=1
+    end
+    index-=1 # To adjust for conditions only breaking after they are not true
+
+    # Resulting path is sum(distances to common point)
+    not_in_common = length(path_from)-index + length(path_to)-index
+end
+
+# Solves day 6-2
+function orbital_transfers_required(filename="day6.input")
+    graph_dict = readfile(filename)
+    return compute_transfers(graph_dict, "YOU", "SAN")
+end
