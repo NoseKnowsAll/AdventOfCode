@@ -1,6 +1,7 @@
 module IntCode
 
 export OpCode
+export ProgramMode
 export Program
 export Instruction
 export initialize_program, interpret_program!
@@ -29,6 +30,9 @@ OPCODE_DIGITS = 2
 
 # Successful completion of program
 SUCCESS = 0
+
+# Pause execution of program, not an error
+PAUSE_EXECUTION = -3
 
 # Invalid OpCode
 INVALID_OPCODE = -1
@@ -62,6 +66,12 @@ function Base.length(opcode::OpCode)
     end
 end
 
+# Mode of a program - how do we handle program outputs?
+@enum ProgramMode begin
+    multi_output=0  # Keep outputting until program halt
+    single_output=1 # Pause program interpretation after single output
+end
+
 # Struct containing the all the information about the raw program
 mutable struct Program
     program::Array{Int64}
@@ -69,14 +79,30 @@ mutable struct Program
     inputs::Array{Int64}
     in_pointer::Integer
     outputs::Array{Int64}
+    mode
 end
 
+# Sets program mode to multi_output (keep outputting until program halt)
+function multi_output!(program::Program)
+    program.mode = multi_output
+end
+
+# Sets program mode to single_output (pause execution after single output)
+function single_output!(program::Program)
+    program.mode = single_output
+end
+
+# Overload Base.show to allow for printing of program
 function Base.show(io::IO, program::Program)
-    print(io, "Program{@$(program.pointer) of $(program.program)}")
+    print(io, "Program{")
+    print(io, "@$(program.pointer) of $(program.program), ")
+    print(io, "@$(program.in_pointer) of inputs $(program.inputs), ")
+    print(io, "outputs $(program.outputs)")
+    print(io, "}")
 end
 
 # Mode of a given parameter
-@enum Modes begin
+@enum ParameterMode begin
     position=0  # interpret parameter as address
     immediate=1 # interpret parameter as value
 end
@@ -85,7 +111,7 @@ end
 struct Instruction
     opcode::OpCode
     length::Integer
-    modes #::Array{Modes} # or single Mode
+    modes #::Array{ParameterMode} # or single Mode
     parameters #::Array{Int64} # or single Integer
 
     function Instruction(opcode_::OpCode, relevant_program)
@@ -205,7 +231,13 @@ function eval_output!(program::Program, instruction::Instruction)
 
     # Actually output
     push!(program.outputs, output_value)
-    return SUCCESS
+
+    # Depending on program mode, return success or pause execution
+    if program.mode == multi_output
+        return SUCCESS
+    else
+        return PAUSE_EXECUTION
+    end
 end
 
 # Evaluate jump_if_true instruction, updating program pointer
@@ -290,7 +322,7 @@ function initialize_program(string)
     array_string = split(string,',')
     program_code = parse.(Int64,array_string)
     init_index = 1
-    return Program(program_code, init_index, Int64[], init_index, Int64[])
+    return Program(program_code, init_index, Int64[], init_index, Int64[], multi_output)
 end
 
 # Actually evaluates the opcode program, updating program as it runs
@@ -301,10 +333,10 @@ function interpret_program!(program::Program)
     while instruction.opcode != halt
         # println(program); flush(stdout) # debugging
         error_code = eval_instruction!(program, instruction)
+        program.pointer += instruction.length
         if error_code != SUCCESS
             return error_code
         end
-        program.pointer += instruction.length
 
         # Setup for next instruction
         instruction = interpret_instruction(program)
