@@ -66,6 +66,9 @@ end
 mutable struct Program
     program::Array{Int64}
     pointer::Integer
+    inputs::Array{Int64}
+    in_pointer::Integer
+    outputs::Array{Int64}
 end
 
 function Base.show(io::IO, program::Program)
@@ -82,8 +85,8 @@ end
 struct Instruction
     opcode::OpCode
     length::Integer
-    modes #::Array{Modes}
-    parameters #::Array{Int32}
+    modes #::Array{Modes} # or single Mode
+    parameters #::Array{Int64} # or single Integer
 
     function Instruction(opcode_::OpCode, relevant_program)
         # Handle unknown case immediately
@@ -184,23 +187,24 @@ function eval_multiply!(program::Program, instruction::Instruction)
 end
 
 # Evaluate input instruction, updating program
-function eval_input!(program::Program, instruction::Instruction, input_value)
+function eval_input!(program::Program, instruction::Instruction)
     val1 = retrieve_value_no_immediate(instruction, 1)
     if val1 < 0
         return val1 # Could be error code
     end
 
     # Actually input
-    program.program[val1] = input_value
+    program.program[val1] = program.inputs[program.in_pointer]
+    program.in_pointer += 1
     return SUCCESS
 end
 
 # Evaluate output instruction
-function eval_output(program::Program, instruction::Instruction)
+function eval_output!(program::Program, instruction::Instruction)
     output_value = retrieve_value(program, instruction, 1)
 
     # Actually output
-    println("output = $output_value")
+    push!(program.outputs, output_value)
     return SUCCESS
 end
 
@@ -255,7 +259,7 @@ function eval_equals!(program::Program, instruction::Instruction)
 end
 
 # Modify program by evaluating instruction
-function eval_instruction!(program::Program, instruction::Instruction; input_value=0)
+function eval_instruction!(program::Program, instruction::Instruction)
     global MAX_INSTRUCTION
 
     if instruction.opcode == add
@@ -263,9 +267,9 @@ function eval_instruction!(program::Program, instruction::Instruction; input_val
     elseif instruction.opcode == multiply
         return eval_multiply!(program, instruction)
     elseif instruction.opcode == input && MAX_INSTRUCTION >= Int(input)
-        return eval_input!(program, instruction, input_value)
+        return eval_input!(program, instruction)
     elseif instruction.opcode == output && MAX_INSTRUCTION >= Int(output)
-        return eval_output(program, instruction)
+        return eval_output!(program, instruction)
     elseif instruction.opcode == jump_if_true && MAX_INSTRUCTION >= Int(jump_if_true)
         return eval_jump_if_true!(program, instruction)
     elseif instruction.opcode == jump_if_false && MAX_INSTRUCTION >= Int(jump_if_false)
@@ -286,22 +290,12 @@ function initialize_program(string)
     array_string = split(string,',')
     program_code = parse.(Int64,array_string)
     init_index = 1
-    return Program(program_code, init_index)
+    return Program(program_code, init_index, Int64[], init_index, Int64[])
 end
 
 # Actually evaluates the opcode program, updating program as it runs
-function interpret_program!(program::Program; input_value=0)
-    # Handle input if necessary
+function interpret_program!(program::Program)
     instruction = interpret_instruction(program)
-    if instruction.opcode == input
-        error_code = eval_instruction!(program, instruction, input_value=input_value)
-        if error_code != SUCCESS
-            return error_code
-        end
-        program.pointer += instruction.length
-
-        instruction = interpret_instruction(program)
-    end
 
     # Run program until it halts
     while instruction.opcode != halt

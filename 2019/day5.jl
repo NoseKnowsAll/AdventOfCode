@@ -11,7 +11,10 @@ function print_diagnostic_codes(filename="day5.input")
 
     program = IntCode.initialize_program(string)
     input_value = 1
-    IntCode.interpret_program!(program, input_value=input_value)
+    program.inputs = [input_value]
+    IntCode.interpret_program!(program)
+
+    println("outputs = $(program.outputs)")
 end
 
 # Solves day 5-2
@@ -24,7 +27,10 @@ function extend_thermal_radiators(filename="day5.input")
     close(file)
 
     program = IntCode.initialize_program(string)
-    input_value=5
-    IntCode.interpret_program!(program, input_value=input_value)
+    input_value = 5
+    program.inputs = [input_value]
+    IntCode.interpret_program!(program)
+
+    println("diagnostic code = $(program.outputs[end])")
 
 end
