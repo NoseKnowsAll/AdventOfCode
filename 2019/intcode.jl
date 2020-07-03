@@ -16,6 +16,7 @@ export initialize_program, interpret_program!
     jump_if_false=6
     less_than=7
     equals=8
+    relative_base=9
     halt=99
     unknown=-1
 end
@@ -59,6 +60,8 @@ function Base.length(opcode::OpCode)
         return 4
     elseif opcode == equals && MAX_INSTRUCTION >= Int(equals)
         return 4
+    elseif opcode == relative_base && MAX_INSTRUCTION >= Int(relative_base)
+        return 2
     elseif opcode == halt
         return 1
     else # Unrecognized opcode
@@ -75,9 +78,10 @@ end
 # Struct containing the all the information about the raw program
 mutable struct Program
     program::Array{Int64}
-    pointer::Integer
+    pointer::Int64
+    relative_base::Int64
     inputs::Array{Int64}
-    in_pointer::Integer
+    in_pointer::Int64
     outputs::Array{Int64}
     mode
 end
@@ -96,6 +100,7 @@ end
 function Base.show(io::IO, program::Program)
     print(io, "Program{")
     print(io, "@$(program.pointer) of $(program.program), ")
+    print(io, "base $(program.relative_base), ")
     print(io, "@$(program.in_pointer) of inputs $(program.inputs), ")
     print(io, "outputs $(program.outputs)")
     print(io, "}")
@@ -105,6 +110,7 @@ end
 @enum ParameterMode begin
     position=0  # interpret parameter as address
     immediate=1 # interpret parameter as value
+    relative=2  # interpret parameter as address, offset from relative base
 end
 
 # Struct containing all the information about a specific instruction
@@ -169,17 +175,23 @@ function retrieve_value(program::Program, instruction::Instruction, index)
         value = program.program[instruction.parameters[index]+1] # ZERO-INDEXED INPUT
     elseif instruction.modes[index] == Int(immediate)
         value = instruction.parameters[index]
+    elseif instruction.modes[index] == Int(relative)
+        value = program.program[program.relative_base+instruction.parameters[index]]
     end
     return value
 end
 
 # Helper function to retrieve the value specified by instruction mode/param at index
 # but does not allow for immediate mode
-function retrieve_value_no_immediate(instruction::Instruction, index)
-    value = instruction.parameters[index]+1 # ZERO-INDEXED INPUT
-    if instruction.modes[index] != Int(position)
+function retrieve_value_no_immediate(program::Program, instruction::Instruction, index)
+    value = 0
+    if instruction.modes[index] == Int(position)
+        value = instruction.parameters[index]+1 # ZERO-INDEXED INPUT
+    elseif instruction.modes[index] == Int(immediate)
         error("$(instruction.opcode)ing to a value, not location")
         return IMMEDIATE_WRITE_ERROR
+    elseif instruction.modes[index] == Int(relative)
+        value = instruction.parameters[index]+program.relative_base
     end
     return value
 end
@@ -188,7 +200,7 @@ end
 function eval_add!(program::Program, instruction::Instruction)
     val1 = retrieve_value(program, instruction, 1)
     val2 = retrieve_value(program, instruction, 2)
-    val3 = retrieve_value_no_immediate(instruction, 3)
+    val3 = retrieve_value_no_immediate(program, instruction, 3)
     if val3 < 0
         return val3 # Could be error code
     end
@@ -202,7 +214,7 @@ end
 function eval_multiply!(program::Program, instruction::Instruction)
     val1 = retrieve_value(program, instruction, 1)
     val2 = retrieve_value(program, instruction, 2)
-    val3 = retrieve_value_no_immediate(instruction, 3)
+    val3 = retrieve_value_no_immediate(program, instruction, 3)
     if val3 < 0
         return val3 # Could be error code
     end
@@ -214,7 +226,7 @@ end
 
 # Evaluate input instruction, updating program
 function eval_input!(program::Program, instruction::Instruction)
-    val1 = retrieve_value_no_immediate(instruction, 1)
+    val1 = retrieve_value_no_immediate(program, instruction, 1)
     if val1 < 0
         return val1 # Could be error code
     end
@@ -268,7 +280,7 @@ end
 function eval_less_than!(program::Program, instruction::Instruction)
     val1 = retrieve_value(program, instruction, 1)
     val2 = retrieve_value(program, instruction, 2)
-    val3 = retrieve_value_no_immediate(instruction, 3)
+    val3 = retrieve_value_no_immediate(program, instruction, 3)
     if val3 < 0
         return val3 # Could be error code
     end
@@ -281,12 +293,19 @@ end
 function eval_equals!(program::Program, instruction::Instruction)
     val1 = retrieve_value(program, instruction, 1)
     val2 = retrieve_value(program, instruction, 2)
-    val3 = retrieve_value_no_immediate(instruction, 3)
+    val3 = retrieve_value_no_immediate(program, instruction, 3)
     if val3 < 0
         return val3 # Could be error code
     end
 
     program.program[val3] = (val1 == val2) ? 1 : 0
+    return SUCCESS
+end
+
+# Evaluate relative_base instruction, updating program's relative_base
+function eval_relative_base!(program::Program, instruction::Instruction)
+    val1 = retrieve_value(program, instruction, 1)
+    program.relative_base += val1
     return SUCCESS
 end
 
@@ -310,6 +329,8 @@ function eval_instruction!(program::Program, instruction::Instruction)
         return eval_less_than!(program, instruction)
     elseif instruction.opcode == equals && MAX_INSTRUCTION >= Int(equals)
         return eval_equals!(program, instruction)
+    elseif instruction.opcode == relative_base && MAX_INSTRUCTION >= Int(relative_base)
+        return eval_relative_base!(program, instruction)
     else
         # an uknown opcode. Not necessarily an error
         return INVALID_OPCODE
@@ -322,7 +343,8 @@ function initialize_program(string)
     array_string = split(string,',')
     program_code = parse.(Int64,array_string)
     init_index = 1
-    return Program(program_code, init_index, Int64[], init_index, Int64[], multi_output)
+    return Program(program_code, init_index, init_index,
+                   Int64[], init_index, Int64[], multi_output)
 end
 
 # Actually evaluates the opcode program, updating program as it runs
