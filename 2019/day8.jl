@@ -4,7 +4,7 @@ function read_image(filename, width, height)
     string = readline(file)
     close(file)
 
-    n_layers = floor(Int64, length(string)/(width*height))
+    n_layers = Int64(length(string)/(width*height))
     image = zeros(Int8, width, height, n_layers)
     col_counter = 1
     row_counter = 1
