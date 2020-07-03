@@ -77,7 +77,7 @@ end
 
 # Struct containing the all the information about the raw program
 mutable struct Program
-    program::Array{Int64}
+    program::Dict{UInt64,Int64}
     pointer::Int64
     relative_base::Int64
     inputs::Array{Int64}
@@ -99,7 +99,12 @@ end
 # Overload Base.show to allow for printing of program
 function Base.show(io::IO, program::Program)
     print(io, "Program{")
-    print(io, "@$(program.pointer) of $(program.program), ")
+    print(io, "@$(program.pointer) of [")
+    dict_keys = sort(collect(keys(program.program)))
+    for i = 1:length(dict_keys)-1
+        print(io, "$(program.program[dict_keys[i]]), ")
+    end
+    print(io,"$(program.program[dict_keys[end]])], ")
     print(io, "base $(program.relative_base), ")
     print(io, "@$(program.in_pointer) of inputs $(program.inputs), ")
     print(io, "outputs $(program.outputs)")
@@ -163,8 +168,17 @@ function interpret_instruction(program::Program)
     index = program.pointer
     instr_digits = digits(program.program[index], pad=OPCODE_DIGITS)
     opcode = sum([instr_digits[k]*10^(k-1) for k = 1:OPCODE_DIGITS])
-    #TODO: This fails if opcode isn't one that's recognized...
-    relevant_program = program.program[index:index+length(OpCode(opcode))-1]
+    function opcode_length(opcode)
+        len = 1
+        try
+            len = length(OpCode(opcode))
+        catch
+            len = 1
+        end
+        return len
+    end
+
+    relevant_program = [program.program[i] for i = index:index+opcode_length(opcode)-1]
     return Instruction(opcode, relevant_program)
 end
 
@@ -172,11 +186,11 @@ end
 function retrieve_value(program::Program, instruction::Instruction, index)
     value = 0
     if instruction.modes[index] == Int(position)
-        value = program.program[instruction.parameters[index]+1] # ZERO-INDEXED INPUT
+        value = get(program.program, instruction.parameters[index]+1, 0) # ZERO-INDEXED INPUT
     elseif instruction.modes[index] == Int(immediate)
         value = instruction.parameters[index]
     elseif instruction.modes[index] == Int(relative)
-        value = program.program[program.relative_base+instruction.parameters[index]]
+        value = get(program.program, program.relative_base+instruction.parameters[index], 0)
     end
     return value
 end
@@ -342,8 +356,9 @@ end
 function initialize_program(string)
     array_string = split(string,',')
     program_code = parse.(Int64,array_string)
+    program_dict = Dict{Int64,Int64}([i => program_code[i] for i = 1:length(program_code)]...)
     init_index = 1
-    return Program(program_code, init_index, init_index,
+    return Program(program_dict, init_index, init_index,
                    Int64[], init_index, Int64[], multi_output)
 end
 
