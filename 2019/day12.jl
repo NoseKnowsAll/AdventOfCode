@@ -67,7 +67,7 @@ function history_repeats_itself(filename="day12.input")
     # Simulate each dimension separately in order to get back to the init state
     dims = size(moons.positions,1)
     timesteps_to_repeat = zeros(Int,dims)
-    for d = 1:dims
+    Threads.@threads for d = 1:dims
         timesteps = 0
         while !(moons.positions[d,:] == init_moons.positions[d,:] &&
             moons.velocities[d,:] == init_moons.velocities[d,:]) ||
