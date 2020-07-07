@@ -147,8 +147,7 @@ end
 
 # Breadth first search to compute the minimum distance from start to oxygen
 function compute_min_distance(space::Space)
-    #oxygen = findfirst(space.map .== 2)
-    distances = -1 .* ones(Int, size(space.map,1), size(space.map,2))
+    distances = UNKNOWN .* ones(Int, size(space.map,1), size(space.map,2))
 
     # Seed BFS at starting location
     n = Int((size(space.map,1)-1)/2)
@@ -169,7 +168,7 @@ function compute_min_distance(space::Space)
                     found_oxygen = true
                     break
                 end
-                if distances[neighbor...] == -1 # Unvisited locations
+                if distances[neighbor...] == UNKNOWN # Unvisited locations
                     distances[neighbor...] = distances[current...]+1
                     push!(to_explore, neighbor)
                 end
@@ -186,4 +185,44 @@ function min_commands(filename="day15.input")
     space = explore_space(program)
     println(space)
     compute_min_distance(space)
+end
+
+# Breadth first search to fill map with oxygen
+# Note that distance == time with the oxygen spreading at 1 neighbor/time step
+function fill_oxygen_bfs(space::Space)
+    distances = UNKNOWN .* ones(Int, size(space.map,1), size(space.map,2))
+
+    # Seed BFS at oxygen location
+    oxygen = findfirst(space.map .== 2)
+    oxygen = [first(oxygen.I), last(oxygen.I)]
+    to_explore = [oxygen]
+    distances[oxygen...] = 0
+    max_distance = distances[oxygen...]
+
+    # BFS through queue of locations to explore
+    while !isempty(to_explore)
+        current = popfirst!(to_explore)
+        for dir = NORTH:EAST
+            neighbor = dir2ind(current,dir)
+            if space.map[neighbor...] != WALL
+                if distances[neighbor...] == UNKNOWN # Unvisited locations
+                    distances[neighbor...] = distances[current...]+1
+                    if distances[neighbor...] > max_distance
+                        max_distance = distances[neighbor...]
+                    end
+                    push!(to_explore, neighbor)
+                end
+            end
+        end
+    end
+
+    return max_distance
+end
+
+# Solves day 15-2
+function fill_oxygen(filename="day15.input")
+    program = init_program(filename)
+    space = explore_space(program)
+    println(space)
+    fill_oxygen_bfs(space)
 end
