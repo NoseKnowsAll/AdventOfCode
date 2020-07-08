@@ -73,15 +73,50 @@ function eight_digits(filename="day16.input", phases=100)
     return digits2num(current[8:-1:1])
 end
 
+# In-place updates input to the values at next phase
+function phase_fft!(input)
+    function compute_row(right_half, element)
+        row = 0
+        len = length(right_half)
+        repeats = floor(Int,len/(4*element))
+        for it = 1:repeats
+            off = 4*element*(it-1)
+            row += sum(@view right_half[off+1:off+element])
+            row -= sum(@view right_half[off+2*element+1:off+3*element])
+        end
+        # Finish computation using any missing values at end of row
+        off = 4*element*repeats
+        row += sum(@view right_half[off+1:min(off+element,len)])
+        row -= sum(@view right_half[off+2*element+1:min(off+3*element,len)])
+        return ones_digit(row)
+    end
+
+    # Update each row using only the values below current row similar to
+    # Gauss-Seidel because pattern_matrix forms an uppter triangular matrix
+    for element = 1:length(input)
+        right_half = @view input[element:length(input)]
+        input[element] = compute_row(right_half, element)
+    end
+end
+
+function eight_digits_perf(filename="day16.input", phases=100)
+    current = read_file(filename)
+    for phase = 1:phases
+        phase_fft!(current)
+    end
+
+    # Only consider first 8 digits
+    return digits2num(current[8:-1:1])
+end
+
 # Solves day 16-2
 function eight_digits_repeat(filename="day16.input", phases=100)
     REPEAT = 10000
     current = read_file(filename,REPEAT)
     offset = digits2num(current[7:-1:1])
-    base = [0 1 0 -1]
     for phase = 1:phases
         println(phase)
-        current = phase_FFT(current, base)
+        phase_fft!(current)
     end
 
     # Only consider 8 digits, specified by the first seven digits of input
