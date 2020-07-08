@@ -3,6 +3,11 @@ function ones_digit(n)
     return mod(abs(n),10)
 end
 
+# Return the number based on an array of digits
+function digits2num(digits)
+    sum([digits[k]*10^(k-1) for k=1:length(digits)])
+end
+
 # Read the file and store as a list of digits
 function read_file(filename, repeat=1)
     file = open(filename)
@@ -38,28 +43,42 @@ function phase_FFT(input, base)
     return output
 end
 
+# Computes one phase of the "FFT" in-place of output
+function phase_FFT!(input, output, base)
+    for element = 1:length(output)
+        mult_pattern = pattern(element, base, length(input))
+        output[element] = ones_digit(sum(input .* mult_pattern))
+    end
+end
+
 # Solves day 16-1
 function eight_digits(filename="day16.input", phases=100)
     current = read_file(filename)
+    next = deepcopy(current)
     base = [0 1 0 -1]
     for phase = 1:phases
-        current = phase_FFT(current, base)
+        if mod(phase,2) == 0
+            phase_FFT!(current, next, base)
+        else
+            phase_FFT!(next, current, base)
+        end
     end
 
     # Only consider first 8 digits
-    return current[1:8]
+    return digits2num(next[8:-1:1])
 end
 
 # Solves day 16-2
 function eight_digits_repeat(filename="day16.input", phases=100)
     REPEAT = 10000
     current = read_file(filename,REPEAT)
+    offset = digits2num(current[7:-1:1])
     base = [0 1 0 -1]
     for phase = 1:phases
         println(phase)
         current = phase_FFT(current, base)
     end
 
-    # Only consider first 8 digits
-    return current[1:8]
+    # Only consider 8 digits, specified by the first seven digits of input
+    return digits2num(current[offset+7:-1:offset])
 end
