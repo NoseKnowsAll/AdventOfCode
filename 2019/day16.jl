@@ -46,16 +46,6 @@ function pattern_matrix(n)
     return matrix
 end
 
-# Computes one phase of the "FFT"
-function phase_FFT(input, base)
-    output = deepcopy(input)
-    for element = 1:length(output)
-        mult_pattern = pattern(element, base, length(input))
-        output[element] = ones_digit(sum(input .* mult_pattern))
-    end
-    return output
-end
-
 # Computes one phase of the "FFT" assuming the pattern matrix has been precomputed
 function phase_FFT_mat(input, mult_matrix)
     return ones_digit.(mult_matrix*input)
@@ -71,6 +61,35 @@ function eight_digits(filename="day16.input", phases=100)
 
     # Only consider first 8 digits
     return digits2num(current[8:-1:1])
+end
+
+# Out of place performant computation of next phase using multithreading
+function phase_fft(input)
+    output = zeros(Int,size(input))
+
+    function compute_row(right_half, element)
+        row = 0
+        len = length(right_half)
+        repeats = floor(Int,len/(4*element))
+        for it = 1:repeats
+            off = 4*element*(it-1)
+            row += sum(@view right_half[off+1:off+element])
+            row -= sum(@view right_half[off+2*element+1:off+3*element])
+        end
+        # Finish computation using any missing values at end of row
+        off = 4*element*repeats
+        row += sum(@view right_half[off+1:min(off+element,len)])
+        row -= sum(@view right_half[off+2*element+1:min(off+3*element,len)])
+        return ones_digit(row)
+    end
+
+    # Update each row using only the values below current row similar to
+    # Gauss-Seidel because pattern_matrix forms an upper triangular matrix
+    Threads.@threads for element = 1:length(input)
+        right_half = @view input[element:length(input)]
+        output[element] = compute_row(right_half, element)
+    end
+    return output
 end
 
 # In-place updates input to the values at next phase
@@ -92,17 +111,18 @@ function phase_fft!(input)
     end
 
     # Update each row using only the values below current row similar to
-    # Gauss-Seidel because pattern_matrix forms an uppter triangular matrix
+    # Gauss-Seidel because pattern_matrix forms an upper triangular matrix
     for element = 1:length(input)
         right_half = @view input[element:length(input)]
         input[element] = compute_row(right_half, element)
     end
 end
 
+# Solves day 16-1 (performant implementation
 function eight_digits_perf(filename="day16.input", phases=100)
     current = read_file(filename)
     for phase = 1:phases
-        phase_fft!(current)
+        current = phase_fft(current)
     end
 
     # Only consider first 8 digits
@@ -116,7 +136,7 @@ function eight_digits_repeat(filename="day16.input", phases=100)
     offset = digits2num(current[7:-1:1])
     for phase = 1:phases
         println(phase)
-        phase_fft!(current)
+        current = phase_fft(current)
     end
 
     # Only consider 8 digits, specified by the first seven digits of input
