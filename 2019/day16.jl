@@ -1,3 +1,5 @@
+using LinearAlgebra
+
 # Return the ones digit of input, ignoring negative signs
 function ones_digit(n)
     return mod(abs(n),10)
@@ -19,18 +21,29 @@ end
 
 # The integer pattern to multiply an n digit list by for a given element
 function pattern(element,base,n)
-    pat = zeros(Int, element, length(base))
+    pat = zeros(Int8, element, length(base))
     for i = 1:length(base)
         for e = 1:element
             pat[e,i] = base[i]
         end
     end
-    pattern_n = zeros(Int, n+1)
+    pattern_n = zeros(Int8, n+1)
     for index = 1:n+1
         pattern_n[index] = pat[mod(index-1,length(base)*element)+1]
     end
     popfirst!(pattern_n) # Pattern for first element is left shifted once
     return pattern_n
+end
+
+# Create the pattern matrix to multiply input by for all elements
+function pattern_matrix(n)
+    base = [0, 1, 0, -1]
+    matrix = zeros(Int8, n,n)
+    for element = 1:n
+        mult = pattern(element, base, n)
+        matrix[element,:] = mult
+    end
+    return matrix
 end
 
 # Computes one phase of the "FFT"
@@ -43,29 +56,21 @@ function phase_FFT(input, base)
     return output
 end
 
-# Computes one phase of the "FFT" in-place of output
-function phase_FFT!(input, output, base)
-    for element = 1:length(output)
-        mult_pattern = pattern(element, base, length(input))
-        output[element] = ones_digit(sum(input .* mult_pattern))
-    end
+# Computes one phase of the "FFT" assuming the pattern matrix has been precomputed
+function phase_FFT_mat(input, mult_matrix)
+    return ones_digit.(mult_matrix*input)
 end
 
 # Solves day 16-1
 function eight_digits(filename="day16.input", phases=100)
     current = read_file(filename)
-    next = deepcopy(current)
-    base = [0 1 0 -1]
+    mult_matrix = pattern_matrix(length(current))
     for phase = 1:phases
-        if mod(phase,2) == 0
-            phase_FFT!(current, next, base)
-        else
-            phase_FFT!(next, current, base)
-        end
+        current = phase_FFT_mat(current, mult_matrix)
     end
 
     # Only consider first 8 digits
-    return digits2num(next[8:-1:1])
+    return digits2num(current[8:-1:1])
 end
 
 # Solves day 16-2
@@ -80,5 +85,5 @@ function eight_digits_repeat(filename="day16.input", phases=100)
     end
 
     # Only consider 8 digits, specified by the first seven digits of input
-    return digits2num(current[offset+7:-1:offset])
+    return digits2num(current[offset+7:-1:offset+1])
 end
