@@ -51,8 +51,8 @@ function phase_FFT_mat(input, mult_matrix)
     return ones_digit.(mult_matrix*input)
 end
 
-# Solves day 16-1
-function eight_digits(filename="day16.input", phases=100)
+# Solves day 16-1 (full matrix implementation)
+function eight_digits_mat(filename="day16.input", phases=100)
     current = read_file(filename)
     mult_matrix = pattern_matrix(length(current))
     for phase = 1:phases
@@ -64,7 +64,7 @@ function eight_digits(filename="day16.input", phases=100)
 end
 
 # Out of place performant computation of next phase using multithreading
-function phase_fft(input)
+function phase_fft(input, offset=0)
     output = zeros(Int,size(input))
 
     function compute_row(right_half, element)
@@ -87,13 +87,13 @@ function phase_fft(input)
     # Gauss-Seidel because pattern_matrix forms an upper triangular matrix
     Threads.@threads for element = 1:length(input)
         right_half = @view input[element:length(input)]
-        output[element] = compute_row(right_half, element)
+        output[element] = compute_row(right_half, element+offset)
     end
     return output
 end
 
 # In-place updates input to the values at next phase
-function phase_fft!(input)
+function phase_fft!(input, offset=0)
     function compute_row(right_half, element)
         row = 0
         len = length(right_half)
@@ -114,11 +114,11 @@ function phase_fft!(input)
     # Gauss-Seidel because pattern_matrix forms an upper triangular matrix
     for element = 1:length(input)
         right_half = @view input[element:length(input)]
-        input[element] = compute_row(right_half, element)
+        input[element] = compute_row(right_half, element+offset)
     end
 end
 
-# Solves day 16-1 (performant implementation
+# Solves day 16-1 (performant implementation)
 function eight_digits_perf(filename="day16.input", phases=100)
     current = read_file(filename)
     for phase = 1:phases
@@ -132,13 +132,16 @@ end
 # Solves day 16-2
 function eight_digits_repeat(filename="day16.input", phases=100)
     REPEAT = 10000
-    current = read_file(filename,REPEAT)
-    offset = digits2num(current[7:-1:1])
+    initial = read_file(filename,REPEAT)
+    offset = digits2num(initial[7:-1:1])
+    # MM with upper-triangular matrix means causality flows one way and we do
+    # not need to consider input before this offset!
+    current = initial[offset+1:end]
     for phase = 1:phases
         println(phase)
-        current = phase_fft(current)
+        current = phase_fft(current,offset)
     end
 
     # Only consider 8 digits, specified by the first seven digits of input
-    return digits2num(current[offset+7:-1:offset+1])
+    return digits2num(current[8:-1:1])
 end
