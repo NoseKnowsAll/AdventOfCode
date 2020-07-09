@@ -84,8 +84,6 @@ function init_maze(filename)
         height += 1
     end
     maze = Maze(ones(Int8,height,width),[0,0], 0)
-
-    total_keys = 0
     for (i,line) in enumerate(eachline(filename))
         for j = 1:length(line)
             maze.map[i,j] = char2id(line[j])
@@ -93,12 +91,11 @@ function init_maze(filename)
                 maze.entrance = [i,j]
                 maze.map[i,j] = PASSAGE
             end
-            if PASSAGE != maze.map[i,j] != WALL
-                total_keys+=1
+            if iskey(maze.map[i,j])
+                maze.total_keys+=1
             end
         end
     end
-    maze.total_keys = Int(total_keys/2)
 
     return maze
 end
@@ -138,15 +135,46 @@ function neighbor2dir(from,to)
     end
 end
 
-# Flood fill from starting location to as many keys as possible
-function flood_fill(maze, start, collected_keys)
+# Flood fill from starting location building up key dependency graph
+function flood_fill_dependency(maze, start)
     # Initialize flood fill of maze from location = start
-    previous = zeros(Int8,2,size(maze.map,1),size(maze.map,2))
-    previous[:,start...] = [UNKNOWN,UNKNOWN]
+    distances = UNKNOWN .* ones(Int,size(maze.map))
+    distances[start...] = 0
+    dependencies = Array{Array{Int8,1},2}(undef,size(maze.map))
+    dependencies[start...] = []
+    all_keys = Dict{Int,Array{Int8,1}}()
+
+    # BFS to explore maze, avoiding walls
+    to_explore = [start]
+    while !isempty(to_explore)
+        location = popfirst!(to_explore)
+        for dir = NORTH:EAST
+            next_loc = dir2ind(location,dir)
+            next_id = maze.map[next_loc...]
+            # Only visit unvisited non-wall locations
+            if next_id != WALL && distances[next_loc...] < 0
+                if iskey(next_id)
+                    all_keys[next_id] = next_loc
+                end
+                push!(to_explore, next_loc)
+                distances[next_loc...] = distances[location...]+1
+                dependencies[next_loc...] = deepcopy(dependencies[location...])
+                # Walking through door creates dependency
+                if isdoor(next_id)
+                    push!(dependencies[next_loc...], door2key(next_id))
+                end
+            end
+        end
+    end
+    return (dependencies,all_keys)
+end
+
+# Flood fill from starting location to compute distances, ignoring doors
+function flood_fill_distance(maze, start)
+    # Initialize flood fill of maze from location = start
     distances = UNKNOWN .* ones(Int,size(maze.map))
     distances[start...] = 0
     to_explore = [start]
-    reachable_keys = Dict{Int,Array{Int8,1}}()
 
     # BFS to explore maze, avoiding walls
     while !isempty(to_explore)
@@ -156,39 +184,153 @@ function flood_fill(maze, start, collected_keys)
             next_id = maze.map[next_loc...]
             # Only visit unvisited non-wall locations
             if next_id != WALL && distances[next_loc...] < 0
-                # Only walk through doors that are already opened
-                if !isdoor(next_id) || door2key(next_id) ∈ collected_keys
-                    if iskey(next_id)
-                        # Only can collect keys that are not yet collected
-                        if next_id ∉ collected_keys
-                            reachable_keys[next_id] = next_loc
+                push!(to_explore, next_loc)
+                distances[next_loc...] = distances[location...]+1
+            end
+        end
+    end
+    return distances
+end
+
+# Returns matrix with matrix[(i,j)] the distance from key i to j, ignoring doors
+function create_distance_matrix(maze, all_keys)
+    distance_matrix = Dict{Tuple{Int8,Int8},Int}()
+    for (k,loc) in all_keys
+        distances = flood_fill_distance(maze,loc)
+        for (k2,loc2) in all_keys
+            dist = distances[loc2...]
+            distance_matrix[(k,k2)] = dist
+        end
+    end
+
+    # Replace diagonal of matrix with distance to starting location
+    distances = flood_fill_distance(maze, maze.entrance)
+    for (k,loc) in all_keys
+        dist = distances[loc...]
+        distance_matrix[(k,k)] = dist
+    end
+    return distance_matrix
+end
+
+mutable struct KeyVertex
+    id::Int8
+    # All keys (excluding this one) necessarily collected to reach this key
+    prev_collected::Array{Int8,1}
+end
+
+# Creates a graph where each vertex is a key and a dependency means that in
+# order to reach that key you have to first have previous key
+function create_dependency_graph(dependencies, all_keys)
+    # Initialize graph without dependencies
+    graph_dict = Dict{Int8,KeyVertex}()
+    visited = Dict{Int8,Bool}()
+    for k in keys(all_keys)
+        graph_dict[k] = KeyVertex(k,[])
+        visited[k] = false
+    end
+
+    # Connect vertices to direct dependencies
+    for (k,loc) in all_keys
+        graph_dict[k].prev_collected = deepcopy(dependencies[loc...])
+        if graph_dict[k].prev_collected == []
+            visited[k] = true
+        end
+    end
+
+    # BFS to connect all vertices to all dependencies
+    while !all(values(visited))
+        for (k,loc) in all_keys
+            if !visited[k]
+                # Can only expand if all parents have been expanded
+                ready_to_expand = true
+                for k_parent in graph_dict[k].prev_collected
+                    if !visited[k_parent]
+                        ready_to_expand = false
+                    end
+                end
+                # Expand out all parents (direct and indirect)
+                if ready_to_expand
+                    new_list = deepcopy(graph_dict[k].prev_collected)
+                    for k_parent in graph_dict[k].prev_collected
+                        for k_grandp in graph_dict[k_parent].prev_collected
+                            if k_grandp ∉ new_list
+                                push!(new_list, k_grandp)
+                            end
                         end
                     end
-                    push!(to_explore, next_loc)
-                    distances[next_loc...] = distances[location...]+1
+                    graph_dict[k].prev_collected = new_list
+                    visited[k] = true
                 end
             end
         end
     end
-    # TODO: will eventually need to return the computed distances as well
-    return reachable_keys
+
+    @assert all(values(visited))
+    return graph_dict
+end
+
+# Computes the distance you would have to travel to collect this key permutation
+function distance_of_permutation(perm, distance_matrix)
+    # Distance to starting key is on the diagonal
+    dist = distance_matrix[(perm[1],perm[1])]
+    for i = 1:length(perm)-1
+        dist += distance_matrix[(perm[i],perm[i+1])]
+    end
+    return dist
+end
+
+# Generates all permutations of length of graph_dict s.t. dependencies are valid
+function compute_minimum_distance(graph_dict, distance_matrix)
+    so_far = Int8[]
+    n = length(graph_dict)
+    it = 0
+    min_dist = typemax(Int)
+    correct_perm = UNKNOWN
+
+    # Pushes to all_permutations where so_far = unfinished list to complete
+    function perm_recursion()
+        if length(so_far) == n
+            dist = distance_of_permutation(so_far, distance_matrix)
+            if dist < min_dist
+                min_dist = dist
+                correct_perm = deepcopy(so_far)
+            end
+
+            it += 1
+            if mod(it,1000000) == 0
+                println(it, ": ",so_far, " @ ",min_dist)
+            end
+        end
+        for k in keys(graph_dict)
+            if k ∉ so_far && issubset(graph_dict[k].prev_collected, so_far)
+                push!(so_far, k)
+                perm_recursion()
+                pop!(so_far)
+            end
+        end
+    end
+    # Kickstart algorithm with empty list of so_far
+    perm_recursion()
+
+    return (min_dist, correct_perm)
 end
 
 # Returns the optimal number of steps needed to collect all keys
 function explore_maze(maze)
-    collected_keys = []
-    flood_fill(maze, maze.entrance, collected_keys)
-
-    # TODO: figure out which key to go for next
-    # I need an obvious short circuit to avoid going way out of the way
-    # for keys super far away...
-    #for i = 1:maze.total_keys
-    #end
+    (dependencies, all_keys) = flood_fill_dependency(maze, maze.entrance)
+    display(dependencies)
+    distance_matrix = create_distance_matrix(maze, all_keys)
+    graph_dict = create_dependency_graph(dependencies, all_keys)
+    for (k,v) in graph_dict
+       println("$(Char(k)) => $(Char.(v.prev_collected))")
+    end
+    (min_dist, correct_perm) = compute_minimum_distance(graph_dict, distance_matrix)
+    # TODO: figure out heuristic for which key to go for next
+    # I need an obvious short circuit to rule out checking for keys super far away...
 end
 
 # Solves day 18-1
 function min_distance(filename="day18.input")
     maze = init_maze(filename)
     explore_maze(maze)
-    #println(maze)
 end
