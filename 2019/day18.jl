@@ -153,18 +153,28 @@ function flood_fill_dependency(maze, start)
             next_id = maze.map[next_loc...]
             # Only visit unvisited non-wall locations
             if next_id != WALL && distances[next_loc...] < 0
-                if iskey(next_id)
-                    all_keys[next_id] = next_loc
-                end
                 push!(to_explore, next_loc)
                 distances[next_loc...] = distances[location...]+1
+
                 dependencies[next_loc...] = deepcopy(dependencies[location...])
                 # Walking through door creates dependency
                 if isdoor(next_id)
                     push!(dependencies[next_loc...], door2key(next_id))
                 end
+                # Store keys in a separate Dict for easy access
+                if iskey(next_id)
+                    all_keys[next_id] = next_loc
+                    # All squares past this key technically require gaining the
+                    # key on this square in order to access them...
+                    push!(dependencies[next_loc...], next_id)
+                end
             end
         end
+    end
+
+    # Key location itself should not be dependent on gaining the key
+    for (k,loc) in all_keys
+        deleteat!(dependencies[loc...], findall(x->x==k, dependencies[loc...]))
     end
     return (dependencies,all_keys)
 end
@@ -210,6 +220,17 @@ function create_distance_matrix(maze, all_keys)
         distance_matrix[(k,k)] = dist
     end
     return distance_matrix
+end
+
+# Print the distance matrix as a matrix in order to better visualize
+function print_dist_mat(distance_matrix, all_keys)
+    for k in keys(all_keys)
+        print(Char(k), ": ")
+        for k2 in keys(all_keys)
+            print(distance_matrix[(k,k2)]," ")
+        end
+        println()
+    end
 end
 
 mutable struct KeyVertex
@@ -320,6 +341,7 @@ function explore_maze(maze)
     (dependencies, all_keys) = flood_fill_dependency(maze, maze.entrance)
     display(dependencies)
     distance_matrix = create_distance_matrix(maze, all_keys)
+    print_dist_mat(distance_matrix, all_keys)
     graph_dict = create_dependency_graph(dependencies, all_keys)
     for (k,v) in graph_dict
        println("$(Char(k)) => $(Char.(v.prev_collected))")
