@@ -311,24 +311,20 @@ function compute_minimum_distance(graph_dict, distance_matrix)
 
     # Pushes to all_permutations where so_far = unfinished list to complete
     function perm_recursion(curr_dist)
-        # Base case: check if final distance is new minimum distance
+        # Short-circuit if we've already over-stepped the min distance
+        if curr_dist >= min_dist
+            return
+        end
+        # Base case: final distance is new minimum distance
         if length(so_far) == n
-            if curr_dist < min_dist
-                min_dist = curr_dist
-                correct_perm = deepcopy(so_far)
-            end
+            min_dist = curr_dist
+            correct_perm = deepcopy(so_far)
 
             it += 1
-            if mod(it,100000) == 0
-                println(it, ": ",so_far, " @ ",min_dist)
-            end
+            println(it, ": ",so_far, " @ ",min_dist)
             return
         end
-
-        # Short-circuit if we've already over-stepped the min distance
-        if curr_dist > min_dist
-            return
-        end
+        # Recursive case: Check all possible next keys and repeat
         for k in keys(graph_dict)
             if k ∉ so_far && issubset(graph_dict[k].prev_collected, so_far)
                 dist = 0
@@ -353,20 +349,18 @@ end
 # Returns the optimal number of steps needed to collect all keys
 function explore_maze(maze)
     (dependencies, all_keys) = flood_fill_dependency(maze, maze.entrance)
-    display(dependencies)
     distance_matrix = create_distance_matrix(maze, all_keys)
-    print_dist_mat(distance_matrix, all_keys)
     graph_dict = create_dependency_graph(dependencies, all_keys)
     for (k,v) in graph_dict
        println("$(Char(k)) => $(Char.(v.prev_collected))")
     end
     (min_dist, correct_perm) = compute_minimum_distance(graph_dict, distance_matrix)
-    # TODO: figure out heuristic for which key to go for next
-    # I need an obvious short circuit to rule out checking for keys super far away...
 end
 
 # Solves day 18-1
 function min_distance(filename="day18.input")
     maze = init_maze(filename)
     explore_maze(maze)
+    # Final answer = [119, 105, 118, 121, 106, 100, 115, 114, 111, 113, 116, 117, 108, 101, 122, 103, 110, 120, 112, 102, 98, 107, 99, 104, 97, 109]
+    # in 4668 steps
 end
