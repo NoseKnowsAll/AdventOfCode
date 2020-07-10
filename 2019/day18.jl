@@ -6,7 +6,7 @@ const ENTRANCE = 2
 # Information about maze
 mutable struct Maze
     map::Array
-    entrance
+    entrances
     total_keys
 end
 
@@ -69,12 +69,6 @@ function Base.show(io::IO, maze::Maze)
     print(io,"entrance = $(maze.entrance)")
 end
 
-# Information about player
-mutable struct Player
-    location
-    keys::Array
-end
-
 # Read file and initialize maze
 function init_maze(filename)
     width = 0
@@ -83,12 +77,12 @@ function init_maze(filename)
         width = max(width,length(line))
         height += 1
     end
-    maze = Maze(ones(Int8,height,width),[0,0], 0)
+    maze = Maze(ones(Int8,height,width),[], 0)
     for (i,line) in enumerate(eachline(filename))
         for j = 1:length(line)
             maze.map[i,j] = char2id(line[j])
             if maze.map[i,j] == ENTRANCE
-                maze.entrance = [i,j]
+                push!(maze.entrances,[i,j])
                 maze.map[i,j] = PASSAGE
             end
             if iskey(maze.map[i,j])
@@ -136,37 +130,42 @@ function neighbor2dir(from,to)
 end
 
 # Flood fill from starting location building up key dependency graph
-function flood_fill_dependency(maze, start)
-    # Initialize flood fill of maze from location = start
+function flood_fill_dependency(maze)
+    # Initialize flood fill of maze from entrance locations
     distances = UNKNOWN .* ones(Int,size(maze.map))
-    distances[start...] = 0
     dependencies = Array{Array{Int8,1},2}(undef,size(maze.map))
-    dependencies[start...] = []
-    all_keys = Dict{Int,Array{Int8,1}}()
+    all_keys = Dict{Int8,Array{Int8,1}}()
+    robotID = Dict{Int8, Int8}()
 
     # BFS to explore maze, avoiding walls
-    to_explore = [start]
-    while !isempty(to_explore)
-        location = popfirst!(to_explore)
-        for dir = NORTH:EAST
-            next_loc = dir2ind(location,dir)
-            next_id = maze.map[next_loc...]
-            # Only visit unvisited non-wall locations
-            if next_id != WALL && distances[next_loc...] < 0
-                push!(to_explore, next_loc)
-                distances[next_loc...] = distances[location...]+1
+    for i_start = 1:length(maze.entrances)
+        distances[maze.entrances[i_start]...] = 0
+        to_explore = [maze.entrances[i_start]]
+        dependencies[maze.entrances[i_start]...] = []
 
-                dependencies[next_loc...] = deepcopy(dependencies[location...])
-                # Walking through door creates dependency
-                if isdoor(next_id)
-                    push!(dependencies[next_loc...], door2key(next_id))
-                end
-                # Store keys in a separate Dict for easy access
-                if iskey(next_id)
-                    all_keys[next_id] = next_loc
-                    # All squares past this key technically require gaining the
-                    # key on this square in order to access them...
-                    push!(dependencies[next_loc...], next_id)
+        while !isempty(to_explore)
+            location = popfirst!(to_explore)
+            for dir = NORTH:EAST
+                next_loc = dir2ind(location,dir)
+                next_id = maze.map[next_loc...]
+                # Only visit unvisited non-wall locations
+                if next_id != WALL && distances[next_loc...] < 0
+                    push!(to_explore, next_loc)
+                    distances[next_loc...] = distances[location...]+1
+
+                    dependencies[next_loc...] = deepcopy(dependencies[location...])
+                    # Walking through door creates dependency
+                    if isdoor(next_id)
+                        push!(dependencies[next_loc...], door2key(next_id))
+                    end
+                    # Store keys in a separate Dict for easy access
+                    if iskey(next_id)
+                        all_keys[next_id] = next_loc
+                        robotID[next_id] = i_start
+                        # All squares past this key technically require gaining the
+                        # key on this square in order to access them...
+                        push!(dependencies[next_loc...], next_id)
+                    end
                 end
             end
         end
@@ -176,7 +175,7 @@ function flood_fill_dependency(maze, start)
     for (k,loc) in all_keys
         deleteat!(dependencies[loc...], findall(x->x==k, dependencies[loc...]))
     end
-    return (dependencies,all_keys)
+    return (dependencies,all_keys,robotID)
 end
 
 # Flood fill from starting location to compute distances, ignoring doors
@@ -213,11 +212,15 @@ function create_distance_matrix(maze, all_keys)
         end
     end
 
-    # Replace diagonal of matrix with distance to starting location
-    distances = flood_fill_distance(maze, maze.entrance)
-    for (k,loc) in all_keys
-        dist = distances[loc...]
-        distance_matrix[(k,k)] = dist
+    # Replace diagonal of matrix with distance to starting locations
+    for i_start = 1:length(maze.entrances)
+        distances = flood_fill_distance(maze, maze.entrances[i_start])
+        for (k,loc) in all_keys
+            dist = distances[loc...]
+            if dist != UNKNOWN
+                distance_matrix[(k,k)] = dist
+            end
+        end
     end
     return distance_matrix
 end
@@ -237,16 +240,18 @@ mutable struct KeyVertex
     id::Int8
     # All keys (excluding this one) necessarily collected to reach this key
     prev_collected::Array{Int8,1}
+    # The ID of the robot that can collect this key
+    robot::Int8
 end
 
 # Creates a graph where each vertex is a key and a dependency means that in
 # order to reach that key you have to first have previous key
-function create_dependency_graph(dependencies, all_keys)
+function create_dependency_graph(dependencies, all_keys, robotID)
     # Initialize graph without dependencies
     graph_dict = Dict{Int8,KeyVertex}()
     visited = Dict{Int8,Bool}()
     for k in keys(all_keys)
-        graph_dict[k] = KeyVertex(k,[])
+        graph_dict[k] = KeyVertex(k,[],robotID[k])
         visited[k] = false
     end
 
@@ -302,8 +307,12 @@ end
 
 # Generates all permutations of length of graph_dict s.t. dependencies are valid
 # and compute the minimum distance to travel amongst the maze to all of them
-function compute_minimum_distance(graph_dict, distance_matrix)
+function compute_minimum_distance(graph_dict, distance_matrix, n_robots)
     so_far = Int8[]
+    robot_keys = Array{Array{Int8,1},1}(undef, n_robots)
+    for i_robot = 1:n_robots
+        robot_keys[i_robot] = Int8[]
+    end
     n = length(graph_dict)
     it = 0
     min_dist = typemax(Int)
@@ -325,22 +334,25 @@ function compute_minimum_distance(graph_dict, distance_matrix)
             return
         end
         # Recursive case: Check all possible next keys and repeat
-        for k in keys(graph_dict)
-            if k ∉ so_far && issubset(graph_dict[k].prev_collected, so_far)
+        for (k,val) in graph_dict
+            if k ∉ so_far && issubset(val.prev_collected, so_far)
+                i_robot = val.robot
                 dist = 0
-                if isempty(so_far)
+                if isempty(robot_keys[i_robot])
                     dist = distance_matrix[(k,k)]
                 else
-                    dist = distance_matrix[(so_far[end],k)]
+                    dist = distance_matrix[(robot_keys[i_robot][end],k)]
                 end
 
                 push!(so_far, k)
+                push!(robot_keys[i_robot], k)
                 perm_recursion(curr_dist+dist)
                 pop!(so_far)
+                pop!(robot_keys[i_robot])
             end
         end
     end
-    # Kickstart algorithm with empty list of so_far
+    # Kickstart recursion with empty list of so_far, robot_keys, and dist=0
     perm_recursion(0)
 
     return (min_dist, correct_perm)
@@ -348,13 +360,14 @@ end
 
 # Returns the optimal number of steps needed to collect all keys
 function explore_maze(maze)
-    (dependencies, all_keys) = flood_fill_dependency(maze, maze.entrance)
+    (dependencies, all_keys, robotID) = flood_fill_dependency(maze)
     distance_matrix = create_distance_matrix(maze, all_keys)
-    graph_dict = create_dependency_graph(dependencies, all_keys)
+    graph_dict = create_dependency_graph(dependencies, all_keys, robotID)
     for (k,v) in graph_dict
-       println("$(Char(k)) => $(Char.(v.prev_collected))")
+       println("$(Char(k)), $(v.robot) => $(Char.(v.prev_collected))")
     end
-    (min_dist, correct_perm) = compute_minimum_distance(graph_dict, distance_matrix)
+    (min_dist, correct_perm) = compute_minimum_distance(graph_dict,
+                                distance_matrix, length(maze.entrances))
 end
 
 # Solves day 18-1
@@ -363,4 +376,27 @@ function min_distance(filename="day18.input")
     explore_maze(maze)
     # Final answer = [119, 105, 118, 121, 106, 100, 115, 114, 111, 113, 116, 117, 108, 101, 122, 103, 110, 120, 112, 102, 98, 107, 99, 104, 97, 109]
     # in 4668 steps
+end
+
+# Modify entrance so that it's now a four player maze
+function four_player!(maze)
+    entrance = pop!(maze.entrances)
+    maze.map[entrance...] = WALL
+    maze.map[entrance[1]-1,entrance[2]] = WALL
+    maze.map[entrance[1]+1,entrance[2]] = WALL
+    maze.map[entrance[1],entrance[2]-1] = WALL
+    maze.map[entrance[1],entrance[2]+1] = WALL
+    push!(maze.entrances, [entrance[1]-1,entrance[2]-1])
+    push!(maze.entrances, [entrance[1]+1,entrance[2]-1])
+    push!(maze.entrances, [entrance[1]-1,entrance[2]+1])
+    push!(maze.entrances, [entrance[1]+1,entrance[2]+1])
+end
+
+# Solves day 18-2
+function min_distance4(filename="day18.input")
+    maze = init_maze(filename)
+    four_player!(maze)
+    explore_maze(maze)
+    # Final answer = [119, 106, 113, 100, 105, 116, 118, 121, 117, 112, 99, 115, 114, 111, 122, 102, 98, 107, 108, 101, 103, 110, 120, 104, 97, 109]
+    # in 1910 steps
 end
