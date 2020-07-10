@@ -301,6 +301,7 @@ function distance_of_permutation(perm, distance_matrix)
 end
 
 # Generates all permutations of length of graph_dict s.t. dependencies are valid
+# and compute the minimum distance to travel amongst the maze to all of them
 function compute_minimum_distance(graph_dict, distance_matrix)
     so_far = Int8[]
     n = length(graph_dict)
@@ -309,29 +310,42 @@ function compute_minimum_distance(graph_dict, distance_matrix)
     correct_perm = UNKNOWN
 
     # Pushes to all_permutations where so_far = unfinished list to complete
-    function perm_recursion()
+    function perm_recursion(curr_dist)
+        # Base case: check if final distance is new minimum distance
         if length(so_far) == n
-            dist = distance_of_permutation(so_far, distance_matrix)
-            if dist < min_dist
-                min_dist = dist
+            if curr_dist < min_dist
+                min_dist = curr_dist
                 correct_perm = deepcopy(so_far)
             end
 
             it += 1
-            if mod(it,1000000) == 0
+            if mod(it,100000) == 0
                 println(it, ": ",so_far, " @ ",min_dist)
             end
+            return
+        end
+
+        # Short-circuit if we've already over-stepped the min distance
+        if curr_dist > min_dist
+            return
         end
         for k in keys(graph_dict)
             if k ∉ so_far && issubset(graph_dict[k].prev_collected, so_far)
+                dist = 0
+                if isempty(so_far)
+                    dist = distance_matrix[(k,k)]
+                else
+                    dist = distance_matrix[(so_far[end],k)]
+                end
+
                 push!(so_far, k)
-                perm_recursion()
+                perm_recursion(curr_dist+dist)
                 pop!(so_far)
             end
         end
     end
     # Kickstart algorithm with empty list of so_far
-    perm_recursion()
+    perm_recursion(0)
 
     return (min_dist, correct_perm)
 end
