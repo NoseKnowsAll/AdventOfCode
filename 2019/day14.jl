@@ -68,6 +68,24 @@ function resolve_ore!(dict, excess, to_resolve)
     excess[name] += to_produce*dict[name].quantity
 end
 
+# Returns the excess base chemicals available to produce 1 fuel
+function resolve_to_base_chemicals(dict, fuel_to_produce)
+    # Contains the amount of excess for each chemical (- => we need to produce it)
+    excess = Dict{String, Int}()
+    for k in keys(dict)
+        excess[k] = 0
+    end
+    to_resolve = ["FUEL"]
+    excess["FUEL"] = -fuel_to_produce
+
+    # Depth first search through our Dict starting from FUEL,
+    # resolving all ingredients into base chemicals made directly from ORE
+    while !isempty(to_resolve)
+        resolve_ore!(dict, excess, to_resolve)
+    end
+    return excess
+end
+
 # Sum up amount of ORE needed to make base chemicals
 function total_ore(dict, excess)
     ore = 0
@@ -81,28 +99,51 @@ function total_ore(dict, excess)
 end
 
 # Depth first search through graph in order to compute ore_needed for each
-function compute_ore_needed!(dict)
-
-    # Contains the amount of excess for each chemical (- => we need to produce it)
-    excess = Dict{String, Int}()
-    for k in keys(dict)
-        excess[k] = 0
-    end
-    to_resolve = ["FUEL"]
-    excess["FUEL"] = -1
-
-    # Depth first search through our Dict starting from FUEL,
-    # resolving all ingredients into base chemicals made directly from ORE
-    while !isempty(to_resolve)
-        resolve_ore!(dict, excess, to_resolve)
-    end
-
-    # Finally, add up the remaining amount of ore to produce base chemicals
+function compute_ore_needed(dict, fuel_to_produce)
+    # Resolve until there are only base chemicals available
+    excess = resolve_to_base_chemicals(dict, fuel_to_produce)
+    # Finally, add up the remaining amount of ore to produce these base chemicals
     total_ore(dict, excess)
 end
 
 # Solves day 14-1
 function min_ore(filename="day14.input")
     dict = read_file(filename)
-    compute_ore_needed!(dict)
+    compute_ore_needed(dict, 1)
+end
+
+# Computes how much fuel we can produce with available_ore ore using bisection
+function how_much_fuel(dict, available_ore)
+    f(x) = compute_ore_needed(dict, x) - available_ore
+    # Low guess must be below our final answer (f(low)<0)
+    low = 1
+    @assert f(low) < 0
+    middle = ceil(Int, available_ore)
+    # High guess must be above our final answer (f(high)>0)
+    high = (middle-low)*2
+    @assert f(high) > 0
+
+    # Bisection method to find when f(x) == 0
+    converged = false
+    iter = 1
+    MAX_ITER = 100
+    while !converged && iter < MAX_ITER
+        value = f(middle)
+        if value <= 0
+            low = middle
+            middle = floor(Int,middle+(high-middle)/2)
+        else
+            high = middle
+            middle = floor(Int,middle+(low-middle)/2)
+        end
+        converged = (high-middle <= 1)
+        iter += 1
+    end
+    return middle
+end
+
+# Solves day 14-2
+function trillion_ore(filename="day14.input")
+    dict = read_file(filename)
+    how_much_fuel(dict, 10^12)
 end
