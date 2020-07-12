@@ -47,7 +47,7 @@ function read_maze(filename)
                 [UNKNOWN,UNKNOWN], Dict{String,Portal}())
 
     # Initialize the maze at location [i,j] to be a portal
-    function init_portal!(i, j, dir)
+    function init_portal!(i, j, dir, outside)
         maze.map[i,j] = PORTAL
         file_i = i+PADDING
         file_j = j+PADDING
@@ -56,11 +56,23 @@ function read_maze(filename)
         name = String([char1,char2])
         name2 = String([char2,char1])
         if name ∈ keys(maze.portals)
-            maze.portals[name].loc2 = [i,j]
+            if outside
+                maze.portals[name].loc2 = [i,j]
+            else
+                maze.portals[name].loc1 = [i,j]
+            end
         elseif name2 ∈ keys(maze.portals)
-            maze.portals[name2].loc2 = [i,j]
+            if outside
+                maze.portals[name2].loc2 = [i,j]
+            else
+                maze.portals[name2].loc1 = [i,j]
+            end
         else
-            maze.portals[name] = Portal(name, [i,j], [UNKNOWN,UNKNOWN])
+            if outside
+                maze.portals[name] = Portal(name, [UNKNOWN,UNKNOWN], [i,j])
+            else
+                maze.portals[name] = Portal(name, [i,j], [UNKNOWN,UNKNOWN])
+            end
         end
     end
     # (i,j) inside these outer bounds are blank or portal names
@@ -86,26 +98,26 @@ function read_maze(filename)
     dir = [-1,0]
     for j = 1:width
         if maze.map[i,j]==PASSAGE
-            init_portal!(i,j,dir)
+            init_portal!(i,j,dir,true)
         end
     end
     i = inner_region_rows[2]+1 # Inner bottom
     for j = inner_region_cols[1]:inner_region_cols[2]
         if maze.map[i,j] == PASSAGE
-            init_portal!(i,j,dir)
+            init_portal!(i,j,dir,false)
         end
     end
     i = height # Bottom
     dir = [1,0]
     for j = 1:width
         if maze.map[i,j] == PASSAGE
-            init_portal!(i,j,dir)
+            init_portal!(i,j,dir,true)
         end
     end
     i = inner_region_rows[1]-1 # Inner top
     for j = inner_region_cols[1]:inner_region_cols[2]
         if maze.map[i,j] == PASSAGE
-            init_portal!(i,j,dir)
+            init_portal!(i,j,dir,false)
         end
     end
 
@@ -113,36 +125,36 @@ function read_maze(filename)
     dir = [0,-1]
     for i = 1:height
         if maze.map[i,j] == PASSAGE
-            init_portal!(i,j,dir)
+            init_portal!(i,j,dir,true)
         end
     end
     j = inner_region_cols[2]+1 # Inner right
     for i = inner_region_rows[1]:inner_region_rows[2]
         if maze.map[i,j] == PASSAGE
-            init_portal!(i,j,dir)
+            init_portal!(i,j,dir,false)
         end
     end
     j = width # Right
     dir = [0,1]
     for i = 1:height
         if maze.map[i,j] == PASSAGE
-            init_portal!(i,j,dir)
+            init_portal!(i,j,dir,true)
         end
     end
     j = inner_region_cols[1]-1 # Inner left
     for i = inner_region_rows[1]:inner_region_rows[2]
         if maze.map[i,j] == PASSAGE
-            init_portal!(i,j,dir)
+            init_portal!(i,j,dir,false)
         end
     end
 
     # Lastly initialize the entrance and exit
     for portal_name in keys(maze.portals)
         if portal_name == "AA"
-            maze.entrance = maze.portals[portal_name].loc1
+            maze.entrance = maze.portals[portal_name].loc2
             maze.map[maze.entrance...] = ENTRANCE
         elseif portal_name == "ZZ"
-            maze.exit = maze.portals[portal_name].loc1
+            maze.exit = maze.portals[portal_name].loc2
             maze.map[maze.exit...] = EXIT
         end
     end
@@ -227,4 +239,11 @@ function min_steps(filename="day20.input")
     maze = read_maze(filename)
     distances = flood_fill_portal(maze, maze.entrance)
     return distances[maze.exit...]
+end
+
+# Solves day 20-2
+function recursive_maze(filename="day20.input")
+    maze = read_maze(filename)
+    #distances = flood_fill_recursive_portal(maze, maze.entrance)
+    #return distances[maze.exit...][1]
 end
