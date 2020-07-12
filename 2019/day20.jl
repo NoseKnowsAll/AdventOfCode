@@ -150,8 +150,81 @@ function read_maze(filename)
     return maze
 end
 
+# Directions for use in exploring maze
+const NORTH = 1
+const SOUTH = 2
+const WEST = 3
+const EAST = 4
+
+# Helper function to convert directions to a separate index
+function dir2ind(start,dir)
+    if dir == NORTH
+        return [start[1]-1,start[2]]
+    elseif dir == SOUTH
+        return [start[1]+1,start[2]]
+    elseif dir == WEST
+        return [start[1],start[2]-1]
+    elseif dir == EAST
+        return [start[1],start[2]+1]
+    end
+end
+
+# Helper function to check if a given location is in-bounds of our maze
+function inbounds(maze::Maze, loc)
+    return 1<=loc[1]<=size(maze.map,1) && 1<=loc[2]<=size(maze.map,2)
+end
+
+# Returns a list of neighbor to this location, including portal jumps
+function get_neighbors(maze::Maze, loc)
+    neighbors = []
+    for dir = NORTH:EAST
+        next_loc = dir2ind(loc,dir)
+        if inbounds(maze, next_loc) && maze.map[next_loc...] != UNKNOWN
+            if maze.map[next_loc...] != WALL
+                # All non-WALL directions should be added to neighbors
+                push!(neighbors, next_loc)
+            end
+        elseif maze.map[loc...] == PORTAL
+            # Portals only have one "out-of-bounds" direction - portal direction
+            for (name,portal) in maze.portals
+                if portal.loc1 == loc
+                    push!(neighbors, portal.loc2)
+                    break
+                elseif portal.loc2 == loc
+                    push!(neighbors, portal.loc1)
+                    break
+                end
+            end
+        end
+    end
+    return neighbors
+end
+
+# Flood fill from given location, using portals
+function flood_fill_portal(maze::Maze, start)
+    # Initialize flood fill of maze from location = start
+    distances = UNKNOWN .* ones(Int,size(maze.map))
+    distances[start...] = 0
+    to_explore = [start]
+
+    # BFS to explore maze, avoiding walls and going through portals
+    while !isempty(to_explore)
+        location = popfirst!(to_explore)
+        neighbors = get_neighbors(maze, location)
+        for next_loc in neighbors
+            # Only visit unvisited neighbors
+            if distances[next_loc...] < 0
+                push!(to_explore, next_loc)
+                distances[next_loc...] = distances[location...]+1
+            end
+        end
+    end
+    return distances
+end
+
 # Solves day 20-1
 function min_steps(filename="day20.input")
     maze = read_maze(filename)
-    println(maze.portals)
+    distances = flood_fill_portal(maze, maze.entrance)
+    return distances[maze.exit...]
 end
