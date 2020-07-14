@@ -1,73 +1,6 @@
-# Interprets input file command into a function call that can be applied to deck
-function interpret_instruction(string)
-    m = match(r"deal with increment (\d+)", string)
-    if m !== nothing
-        n = parse(Int,m.captures[1])
-        return x -> increment_n!(x, n)
-    end
-    m = match(r"deal into new stack", string)
-    if m !== nothing
-        return x -> deal!(x)
-    end
-    m = match(r"cut (-?\d+)", string)
-    if m !== nothing
-        n = parse(Int, m.captures[1])
-        return x -> cut_n!(x, n)
-    end
-    error("$string did not match any known command!")
-end
-
-# Reads in and evaluates the instructions on deck specified by filename
-function run_instructions!(deck, filename)
-    for line in readlines(filename)
-        func_call = interpret_instruction(line)
-        func_call(deck)
-    end
-end
-
-# Deals a new deck from previous deck (just reverses all cards)
-function deal!(deck)
-    reverse!(deck)
-end
-
-# Cuts the deck with a given number (strictly positive or negative)
-function cut_n!(deck, n)
-    if n > 0
-        first = splice!(deck,1:n)
-        append!(deck, first)
-    elseif n < 0
-        len = length(deck)
-        last = splice!(deck, len+n+1:len)
-        prepend!(deck, last)
-    else
-        error("Cannot cut with size 0")
-    end
-    return deck
-end
-
-# Deals a deck with increment n
-function increment_n!(deck, n)
-    len = length(deck)
-    new_deck = deepcopy(deck)
-    for i=1:len
-        inc_i = mod((i-1)*n, len)+1
-        deck[inc_i] = new_deck[i]
-    end
-    return deck
-end
-
 # Create a deck with factory order (0:deck_size-1)
 function factory_order(deck_size)
     collect(0:deck_size-1)
-end
-
-# Solves day 22-1
-function position_of_2019(filename="day22.input", deck_size=10007)
-    deck = factory_order(deck_size)
-    search_card = 2019
-    permutation = run_instructions_p(deck_size,filename)
-    final_deck = permutation*deck
-    return (findfirst(final_deck .== search_card)-1) # ZERO-INDEXED INPUT
 end
 
 # Permutation vector - column representation of permutation matrix
@@ -91,12 +24,12 @@ function Base.:*(pvec1::Pvec, vec)
     return vec[pvec1.p]
 end
 
-# Returns Pvec equivalent of deal!
+# Returns Pvec equivalent of dealing a deck from scratch
 function deal_p(deck_size)
     return Pvec(collect(deck_size:-1:1))
 end
 
-# Returns Pvec equivalent of cut_n!
+# Returns Pvec equivalent of cutting a deck with offset n
 function cut_p(deck_size, n)
     if n > 0
         return Pvec(union(n+1:deck_size, 1:n))
@@ -107,7 +40,7 @@ function cut_p(deck_size, n)
     end
 end
 
-# Returns Pvec equivalent of increment_n!
+# Returns Pvec equivalent of dealing a deck with increment n
 function increment_p(deck_size, n)
     p = Pvec(zeros(Int,deck_size))
     for i=1:deck_size
@@ -146,25 +79,120 @@ function run_instructions_p(deck_size, filename)
     return overall_p
 end
 
-# Solves day 20-2
-function space_cards(filename="day22.input", deck_size=119315717514047)
-    # Compute one total shuffle process as a permutation matrix
-    perm = run_instructions_p(deck_size, filename)
-    total_perm = deepcopy(perm)
-    # Repeat shuffle process shuffle_iterations number of times
-    shuffle_iterations = 101741582076661
-    powers = Int64(1)
-    while powers*2 <= shuffle_iterations
-        left_mult!(total_perm, total_perm)
-        powers *= 2
-    end
-    while powers < shuffle_iterations
-        left_mult!(total_perm, perm)
-        powers += 1
-    end
-    # Finally, apply permutation to our deck
+# Solves day 22-1
+function position_of_2019(filename="day22.input", deck_size=10007)
     deck = factory_order(deck_size)
+    search_card = 2019
+    permutation = run_instructions_p(deck_size,filename)
+    final_deck = permutation*deck
+    return (findfirst(final_deck .== search_card)-1) # ZERO-INDEXED INPUT
+end
+
+# Permutation matrices are now stored via an affine map a*x+b (mod size)
+mutable struct AffinePerm
+    # (P*v)[i] == v[a*i + b (mod size)]
+    a::Int128
+    b::Int128
+    size::Int64
+
+    function AffinePerm(a_::Integer, b_::Integer, size_::Integer)
+        new(mod(a_, size_), mod(b_, size_), size_)
+    end
+end
+
+# Returns AffinePerm equivalent of dealing a deck from scratch
+function deal_affine(deck_size)
+    return AffinePerm(-1, -1, deck_size)
+end
+
+# Returns AffinePerm equivalent of cutting a deck with offset n
+function cut_affine(deck_size, n)
+    return AffinePerm(1, n, deck_size)
+end
+
+# Returns AffinePerm equivalent of dealing a deck with increment n
+function increment_affine(deck_size, n)
+    return AffinePerm(invmod(n,deck_size), 0, deck_size)
+end
+
+# perm1 = perm2(perm1), which is only possible because affine maps form a group
+function left_compose!(perm1::AffinePerm, perm2::AffinePerm)
+    @assert perm1.size == perm2.size
+    perm1.b = mod(perm2.a*perm1.b + perm2.b, perm1.size)
+    perm1.a = mod(perm2.a*perm1.a, perm1.size)
+end
+
+# perm1 = perm1(perm2), which is only possible because affine maps form a group
+function right_compose!(perm1::AffinePerm, perm2::AffinePerm)
+    @assert perm1.size == perm2.size
+    perm1.b = mod(perm1.a*perm2.b + perm1.b, perm2.size)
+    perm1.a = mod(perm1.a*perm2.a, perm2.size)
+end
+
+# Evaluate the affine permutation in order to find the value at given index
+function eval(perm::AffinePerm, index)
+    return mod(perm.a*index + perm.b, perm.size)
+end
+
+# Interprets input file command into an affine mapping
+function interpret_instruction_affine(deck_size, string)
+    m = match(r"deal with increment (\d+)", string)
+    if m !== nothing
+        n = parse(Int,m.captures[1])
+        return increment_affine(deck_size, n)
+    end
+    m = match(r"deal into new stack", string)
+    if m !== nothing
+        return deal_affine(deck_size)
+    end
+    m = match(r"cut (-?\d+)", string)
+    if m !== nothing
+        n = parse(Int, m.captures[1])
+        return cut_affine(deck_size, n)
+    end
+    error("$string did not match any known command!")
+end
+
+# Reads in instructions specified by filename and forms affine mapping
+function run_instructions_affine(deck_size, filename)
+    overall_p = AffinePerm(Int128(1), Int128(0), deck_size) # Identity mapping
+    for line in readlines(filename)
+        new_p = interpret_instruction_affine(deck_size, line)
+        right_compose!(overall_p, new_p)
+    end
+    return overall_p
+end
+
+# Repeatedly apply permutation given number of iterations
+function repeat_permutation(perm::AffinePerm, iterations)
+    total_perm = deepcopy(perm)
+    powers = Int128(1)
+    powers_of_two = [deepcopy(total_perm)]
+    highest_power = 1
+    # Increment by powers of 2 due to associativity of permutations
+    while powers*2 <= iterations
+        right_compose!(total_perm, total_perm)
+        powers *= 2
+        push!(powers_of_two, deepcopy(total_perm))
+        highest_power += 1
+    end
+    # Increment by decreasing powers of 2
+    for power = highest_power-1:-1:1
+        while powers + (1<<(power-1)) <= iterations
+            right_compose!(total_perm, powers_of_two[power])
+            powers += (1<<(power-1))
+        end
+    end
+    return total_perm
+end
+
+# Solves day 22-2
+function space_cards(filename="day22.input", deck_size=119315717514047)
+    # Compute one total shuffle process as an affine mapping
+    perm = run_instructions_affine(deck_size, filename)
+    shuffle_iterations = 101741582076661
+    total_perm = repeat_permutation(perm, shuffle_iterations)
+    # Finally, apply permutation to figure out what happens to position of interest
     position_of_interest = 2020
-    final_deck = total_perm*deck
-    return final_deck[position_of_interest+1] # ZERO-INDEXED INPUT
+    final_value = eval(total_perm, position_of_interest)
 end
