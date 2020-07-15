@@ -32,7 +32,7 @@ function input_argument!(program::IntCode.Program, input_string)
 end
 
 # Run program until output is breakpoint (default = '\n')
-function run_to_enter!(program::IntCode.Program, breakpoint='\n', show_output=false)
+function run_to_enter!(program::IntCode.Program, show_output=false, breakpoint='\n')
     finished = false
     error_code = IntCode.SUCCESS
     while !finished
@@ -61,10 +61,9 @@ end
 
 # Prints the droid's last moments to the console
 function show_last_moments!(program)
-    breakpoint = '\n'
     finished = false
     while !finished
-        error_code = run_to_enter!(program, breakpoint, true)
+        error_code = run_to_enter!(program, true)
         finished = (error_code == IntCode.SUCCESS)
     end
 end
@@ -89,10 +88,23 @@ function hull_damage(filename="day21.input")
     program = ASCII.init_program(filename)
     # Max of 15 strings
     # if the gap is at least 2, make sure to end just after it
-    # otherwise if there's any single gap at all
+    # otherwise if there's any single gap at all, just jump
     # and ground to jump to is solid, just jump
-    # (!(A || B) && !C) || !(A && B && C) ] && D
-    script = ["OR A T","OR B J","OR J T","NOT T J","NOT C T","AND T J","NOT A T","NOT T T","AND B T","AND C T","NOT T T","OR T J","AND D J"]
+    # [!(B || !C) && D] || !A
+    script = ["NOT B J", "NOT C T", "OR T J", "AND D J", "NOT A T", "OR T J"]
     ASCII.supply_springscript!(program, script, "WALK")
+    ASCII.run_springscript!(program)
+end
+
+# Solves day 22-1
+function hull_damage_run(filename="day21.input")
+    program = ASCII.init_program(filename)
+    # Same logic as before, but we also plan wrt H
+    # If H is not ground, there should be two jumps between A and H
+    # But if H is hole, then we have to jump after D, so necessarily E is safe
+    # and we jump over H after E
+    # [!(B || !C) && D && H] || !A
+    script = ["NOT B J", "NOT C T", "OR T J", "AND D J", "AND H J", "NOT A T", "OR T J"]
+    ASCII.supply_springscript!(program, script, "RUN")
     ASCII.run_springscript!(program)
 end
