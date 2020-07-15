@@ -5,31 +5,7 @@ module ASCII
 include("intcode.jl")
 
 const MAX_INPUT_LENGTH = 15
-const UNKNOWN = -1
-const TUMBLE = 4
-const SCAFFOLD = 5
 const MAX_ASCII = Int('z')
-
-# Interprets a character on the map to an integer to be stored
-function char2int(char)
-    if char == '#'
-        return SCAFFOLD
-    elseif char == '.'
-        return SPACE
-    elseif char == '^'
-        return UP
-    elseif char == 'v'
-        return DOWN
-    elseif char == '<'
-        return LEFT
-    elseif char == '>'
-        return RIGHT
-    elseif char == 'X'
-        return TUMBLE
-    else
-        return UNKNOWN
-    end
-end
 
 # Initialize program for running spring script
 function init_program(filename)::IntCode.Program
@@ -58,7 +34,7 @@ end
 # Run program until output is breakpoint (default = '\n')
 function run_to_enter!(program::IntCode.Program, breakpoint='\n', show_output=false)
     finished = false
-    error_code = IntCode.halt
+    error_code = IntCode.SUCCESS
     while !finished
         error_code = IntCode.interpret_program!(program)
         if program.outputs[end] == Int(breakpoint)
@@ -74,14 +50,13 @@ function run_to_enter!(program::IntCode.Program, breakpoint='\n', show_output=fa
 end
 
 # Supply springscript to program
-function supply_springscript!(program::IntCode.Program, script, walk="WALK")
+function supply_springscript!(program::IntCode.Program, script, finalize_string)
+    run_to_enter!(program) # "Input instructions:"
     for i = 1:length(script)
         input_argument!(program, script[i])
     end
-    input_argument!(program, walk)
-    run_to_enter!(program)
-    run_to_enter!(program)
-    run_to_enter!(program)
+    input_argument!(program, finalize_string) # "WALK" or "RUN"
+    run_to_enter!(program) # '\n'
 end
 
 # Prints the droid's last moments to the console
@@ -96,8 +71,10 @@ end
 
 # Runs springscript until either inevitable death or solution is attained
 function run_springscript!(program::IntCode.Program)
-    IntCode.interpret_program!(program)
-    IntCode.interpret_program!(program)
+    run_to_enter!(program) # "[finalize_string]ing..."
+    run_to_enter!(program) # '\n'
+
+    IntCode.interpret_program!(program) # Actually run program
     if program.outputs[end] > MAX_ASCII
         return program.outputs[end]
     else
@@ -111,9 +88,11 @@ end
 function hull_damage(filename="day21.input")
     program = ASCII.init_program(filename)
     # Max of 15 strings
-    #script = ["NOT A J","NOT B T", "OR T J", "NOT C J", "OR T J", "AND D J"]
-    #script = ["OR A T", "OR C J", "OR J T", "NOT T J", "NOT C T", "NOT T T", "AND D T", "OR T J"]
+    # if the gap is at least 2, make sure to end just after it
+    # otherwise if there's any single gap at all
+    # and ground to jump to is solid, just jump
+    # (!(A || B) && !C) || !(A && B && C) ] && D
     script = ["OR A T","OR B J","OR J T","NOT T J","NOT C T","AND T J","NOT A T","NOT T T","AND B T","AND C T","NOT T T","OR T J","AND D J"]
-    ASCII.supply_springscript!(program, script)
+    ASCII.supply_springscript!(program, script, "WALK")
     ASCII.run_springscript!(program)
 end
