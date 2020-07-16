@@ -84,7 +84,7 @@ function pass_checkpoint!(droid::Droid, program::ASCII.IntCode.Program)
             # We pass checkpoint!
             println(one_line)
             if occursin("2424308736", one_line)
-                println("GAME OVER")
+                println("GAME OVER! Thanks for playing!")
             else
                 println(COMMAND)
             end
