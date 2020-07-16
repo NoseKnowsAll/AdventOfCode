@@ -15,7 +15,7 @@ function show_last_moments!(program)
     finished = false
     while !finished
         error_code = ASCII.run_to_enter!(program, true)
-        finished = (error_code == IntCode.SUCCESS)
+        finished = (error_code == ASCII.SUCCESS)
     end
 end
 
@@ -24,7 +24,7 @@ function run_springscript!(program::ASCII.IntCode.Program)
     ASCII.run_to_enter!(program) # "[finalize_string]ing..."
     ASCII.run_to_enter!(program) # '\n'
 
-    ASCII.IntCode.interpret_program!(program) # Actually run program
+    ASCII.interpret_program!(program) # Actually run program
     if program.outputs[end] > ASCII.MAX_ASCII
         return program.outputs[end]
     else

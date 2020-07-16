@@ -2,6 +2,7 @@ module ASCII
 
 include("intcode.jl")
 
+const SUCCESS = IntCode.SUCCESS
 const MAX_INPUT_LENGTH = 20
 const MAX_ASCII = Int('z')
 
@@ -29,12 +30,17 @@ function input_argument!(program::IntCode.Program, input_string)
     push!(program.inputs, Int('\n')) # Always end with an endline
 end
 
+# Run program once, regardless of output
+function interpret_program!(program::IntCode.Program)
+    IntCode.interpret_program!(program)
+end
+
 # Run program until output is breakpoint (default = '\n')
 function run_to_enter!(program::IntCode.Program, show_output=false, breakpoint='\n')
     finished = false
     error_code = IntCode.SUCCESS
     while !finished
-        error_code = IntCode.interpret_program!(program)
+        error_code = interpret_program!(program)
         if program.outputs[end] == Int(breakpoint)
             finished = true
             if show_output
