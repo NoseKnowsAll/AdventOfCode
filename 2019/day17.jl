@@ -70,21 +70,23 @@ end
 # Create the Scaffolding struct
 function init_scaffolding!(program::ASCII.IntCode.Program)::Scaffolding
     # Concatenate output characters to string
-    scaffold_string = ""
+    scaffold_strings = String[]
     finished = false
     while !finished
-        error_code = ASCII.interpret_program!(program)
+        prev_index = length(program.outputs)
+        error_code = ASCII.run_to_enter!(program)
         if error_code == ASCII.SUCCESS
             finished = true
         else
-            scaffold_string *= Char(program.outputs[end])
-            if length(scaffold_string)>1 && scaffold_string[end-1:end]=="\n\n"
-                break
+            word_length = length(program.outputs)-1-prev_index # Ignores trailing '\n'
+            if word_length == 0
+                finished = true
+            else
+                push!(scaffold_strings, String(Char.(program.outputs[prev_index+1:end-1])))
             end
         end
     end
-    # end-2 to ignore trailing 2 \n characters
-    scaffold_strings = split(scaffold_string[1:end-2], '\n')
+
     width = length(scaffold_strings[1]) # ASSUMES THEY ARE ALL THE SAME SIZE
     height = length(scaffold_strings)
     scaffold = Scaffolding(UNKNOWN.*ones(Int,height,width),
