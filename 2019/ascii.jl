@@ -3,7 +3,6 @@ module ASCII
 include("intcode.jl")
 
 const SUCCESS = IntCode.SUCCESS
-const MAX_INPUT_LENGTH = 20
 const MAX_ASCII = Int('z')
 
 # Initialize program for running ASCII-capable code
@@ -20,13 +19,8 @@ end
 
 # Input string to program, one ASCII code at a time
 function input_argument!(program::IntCode.Program, input_string)
-    if length(input_string) > MAX_INPUT_LENGTH + 1 # Not including endline
-        error("routine is too long for input!")
-    end
     inputs = Int.(collect(input_string))
-    for i = 1:length(inputs)
-        push!(program.inputs, inputs[i])
-    end
+    append!(program.inputs, inputs)
     push!(program.inputs, Int('\n')) # Always end with an endline
 end
 
@@ -52,6 +46,18 @@ function run_to_enter!(program::IntCode.Program, store_output=false, breakpoint=
         return (error_code, output_string)
     else
         return error_code
+    end
+end
+
+# Runs program until output line is a given string
+function run_to_string!(program::IntCode.Program, output_string)
+    all_strings = String[]
+    while true
+        (error, test_string) = run_to_enter!(program, true)
+        if test_string == output_string || error == SUCCESS
+            return all_strings
+        end
+        push!(all_strings, test_string)
     end
 end
 
