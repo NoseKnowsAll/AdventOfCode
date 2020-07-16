@@ -36,21 +36,23 @@ function interpret_program!(program::IntCode.Program)
 end
 
 # Run program until output is breakpoint (default = '\n')
-function run_to_enter!(program::IntCode.Program, show_output=false, breakpoint='\n')
+function run_to_enter!(program::IntCode.Program, store_output=false, breakpoint='\n')
     finished = false
     error_code = IntCode.SUCCESS
+    output_string = ""
     while !finished
         error_code = interpret_program!(program)
         if program.outputs[end] == Int(breakpoint)
             finished = true
-            if show_output
-                println()
-            end
-        elseif show_output
-            print(Char(program.outputs[end]))
+        elseif store_output
+            output_string *= Char(program.outputs[end])
         end
     end
-    return error_code
+    if store_output
+        return (error_code, output_string)
+    else
+        return error_code
+    end
 end
 
 end

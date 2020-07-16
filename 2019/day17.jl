@@ -74,16 +74,11 @@ function init_scaffolding!(program::ASCII.IntCode.Program)::Scaffolding
     finished = false
     while !finished
         prev_index = length(program.outputs)
-        error_code = ASCII.run_to_enter!(program)
-        if error_code == ASCII.SUCCESS
+        (error_code, string) = ASCII.run_to_enter!(program, true)
+        if length(string) == 0
             finished = true
         else
-            word_length = length(program.outputs)-1-prev_index # Ignores trailing '\n'
-            if word_length == 0
-                finished = true
-            else
-                push!(scaffold_strings, String(Char.(program.outputs[prev_index+1:end-1])))
-            end
+            push!(scaffold_strings, string)
         end
     end
 

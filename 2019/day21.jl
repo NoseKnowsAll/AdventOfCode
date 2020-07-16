@@ -14,7 +14,8 @@ end
 function show_last_moments!(program)
     finished = false
     while !finished
-        error_code = ASCII.run_to_enter!(program, true)
+        (error_code,string) = ASCII.run_to_enter!(program, true)
+        println(string)
         finished = (error_code == ASCII.SUCCESS)
     end
 end
