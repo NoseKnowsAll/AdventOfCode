@@ -69,18 +69,7 @@ end
 
 # Create the Scaffolding struct
 function init_scaffolding!(program::ASCII.IntCode.Program)::Scaffolding
-    # Concatenate output characters to string
-    scaffold_strings = String[]
-    finished = false
-    while !finished
-        prev_index = length(program.outputs)
-        (error_code, string) = ASCII.run_to_enter!(program, true)
-        if length(string) == 0
-            finished = true
-        else
-            push!(scaffold_strings, string)
-        end
-    end
+    scaffold_strings = ASCII.run_to_string!(program, "")
 
     width = length(scaffold_strings[1]) # ASSUMES THEY ARE ALL THE SAME SIZE
     height = length(scaffold_strings)
