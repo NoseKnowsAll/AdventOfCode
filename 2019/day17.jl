@@ -34,7 +34,6 @@ end
 # All information about scaffolding
 mutable struct Scaffolding
     map::Array
-    robot::Array
 end
 
 # Override Base.show to allow for viewing scaffold state
@@ -74,8 +73,7 @@ function init_scaffolding!(program::ASCII.IntCode.Program)::Scaffolding
 
     width = length(scaffold_strings[1]) # ASSUMES THEY ARE ALL THE SAME SIZE
     height = length(scaffold_strings)
-    scaffold = Scaffolding(UNKNOWN.*ones(Int,height,width),
-                            [UNKNOWN,UNKNOWN])
+    scaffold = Scaffolding(UNKNOWN.*ones(Int,height,width))
     for i = 1:height
         scaffold.map[i,:] = char2int.(collect(scaffold_strings[i]))
     end
@@ -112,6 +110,101 @@ function alignment_parameters(filename="day17.input")
     # Returns the sum of the alignment parameters
     intersections = scaffold_intersections(scaffold)
     sum_alignment_parameters(intersections)
+end
+
+# Set starting location and direction
+function init_loc(scaffold::Scaffolding)
+    for j = 1:size(scaffold.map,2)
+        for i = 1:size(scaffold.map,1)
+            if scaffold.map[i,j] == UP
+                return ([i,j],UP)
+            elseif scaffold.map[i,j] == DOWN
+                return ([i,j],DOWN)
+            elseif scaffold.map[i,j] == LEFT
+                return ([i,j],LEFT)
+            elseif scaffold.map[i,j] == RIGHT
+                return ([i,j],RIGHT)
+            end
+        end
+    end
+end
+
+# Helper function to convert directions to a separate index
+function dir2ind(start,dir)
+    if dir == UP
+        return [start[1]-1,start[2]]
+    elseif dir == DOWN
+        return [start[1]+1,start[2]]
+    elseif dir == LEFT
+        return [start[1],start[2]-1]
+    elseif dir == RIGHT
+        return [start[1],start[2]+1]
+    end
+end
+
+# Helper function to check if a given location is in-bounds of our scaffold
+function inbounds(scaffold::Scaffolding, loc)
+    return 1<=loc[1]<=size(scaffold.map,1) && 1<=loc[2]<=size(scaffold.map,2)
+end
+
+# Given a location and direction, turn right and move 1 step
+function turn_right(loc, dir)
+    new_dir = deepcopy(dir)
+    if dir == UP
+        new_dir = RIGHT
+    elseif dir == DOWN
+        new_dir = LEFT
+    elseif dir == LEFT
+        new_dir = UP
+    elseif dir == RIGHT
+        new_dir = DOWN
+    end
+    new_loc = dir2ind(loc, new_dir)
+    return (new_loc, new_dir)
+end
+
+# Returns the string corresponding to the directions the droid will have to
+# travel in order to walk along the entire scaffolding
+function get_scaffold_string(scaffold::Scaffolding)
+    (loc,dir) = init_loc(scaffold)
+    finished = false
+    scaffold_string = ""
+    curr_steps = UNKNOWN
+    while !finished
+        next_loc = dir2ind(loc, dir)
+        if inbounds(scaffold,next_loc) && scaffold.map[next_loc...] == SCAFFOLD
+            # Continue heading in the same direction robot was heading
+            loc = next_loc
+            curr_steps += 1
+        else # Must turn
+            if curr_steps > UNKNOWN
+                scaffold_string*=(string(curr_steps)*",")
+            end
+            (next_loc, next_dir) = turn_right(loc, dir)
+            if inbounds(scaffold,next_loc) && scaffold.map[next_loc...] == SCAFFOLD
+                # Right turn leads us on our way
+                loc = next_loc
+                dir = next_dir
+                curr_steps = 1
+                scaffold_string*="R,"
+                continue
+            end
+            (next_loc, next_dir) = turn_right(loc, next_dir)
+            (next_loc, next_dir) = turn_right(loc, next_dir)
+            if inbounds(scaffold,next_loc) && scaffold.map[next_loc...] == SCAFFOLD
+                # Left turn leads us on our way
+                loc = next_loc
+                dir = next_dir
+                curr_steps = 1
+                scaffold_string*="L,"
+                continue
+            end
+            # No more turns available, finish up
+            finished = true
+            scaffold_string = scaffold_string[1:end-1] # Remove trailing comma
+        end
+    end
+    return scaffold_string
 end
 
 # Removes the given segment string from string list and returns remaining strings
@@ -222,7 +315,7 @@ end
 # Segments the original_string into a list of segment_names with a fixed
 # maximum length of MAX_SEGMENT_LENGTH
 function parse_string_sequence(original_string, segment_names)
-    segmentation = []
+    segmentation = String[]
     # Calls helper function to parse the sequence into a given segmentation
     (valid, soln) = parse_recursion!(segmentation, [original_string], segment_names, original_string)
     @assert valid
@@ -245,16 +338,14 @@ end
 # Solves day 17-2
 function space_dust(filename="day17.input")
     program = ASCII.init_program(filename)
-    # TODO: figure out these strings from the scaffolding itself
-    total_scaffold_string = "R,6,L,12,R,6,R,6,L,12,R,6,L,12,R,6,L,8,L,12,R,12,L,10,L,10,L,12,R,6,L,8,L,12,R,12,L,10,L,10,L,12,R,6,L,8,L,12,R,12,L,10,L,10,L,12,R,6,L,8,L,12,R,6,L,12,R,6"
-    (solution, segmentation) = parse_string_sequence(total_scaffold_string, ["A","B","C"])
-    #solution = "A,A,B,C,B,C,B,C,B,A"
-    #segmentation = ["R,6,L,12,R,6", "L,12,R,6,L,8,L,12", "R,12,L,10,L,10"]
-    continuous_feed = "n"
-
     # Wake up robot and supply it its instructions
     program.program[1] = 2
     scaffold = init_scaffolding!(program)
+    scaffold_string = get_scaffold_string(scaffold)
+    (solution, segmentation) = parse_string_sequence(scaffold_string, ["A","B","C"])
+    #solution = "A,A,B,C,B,C,B,C,B,A"
+    #segmentation = ["R,6,L,12,R,6", "L,12,R,6,L,8,L,12", "R,12,L,10,L,10"]
+    continuous_feed = "n"
     supply_arguments!(program, solution,segmentation,continuous_feed)
 
     # Run program and reach end of scaffolding
