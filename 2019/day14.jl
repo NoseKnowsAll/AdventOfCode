@@ -107,9 +107,9 @@ function compute_ore_needed(dict, fuel_to_produce)
 end
 
 # Solves day 14-1
-function min_ore(filename="day14.input")
+function min_ore(filename="day14.input", ore_needed=1)
     dict = read_file(filename)
-    compute_ore_needed(dict, 1)
+    compute_ore_needed(dict, ore_needed)
 end
 
 # Computes how much fuel we can produce with available_ore ore using bisection
