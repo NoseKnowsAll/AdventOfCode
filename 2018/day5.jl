@@ -39,11 +39,7 @@ end
 
 # Return a Set containing all lowercase units found in this polymer
 function all_units(polymer)
-    units = Set()
-    for unit in polymer
-        push!(units, lowercase(unit))
-    end
-    return units
+    units = Set(lowercase.(polymer))
 end
 
 
