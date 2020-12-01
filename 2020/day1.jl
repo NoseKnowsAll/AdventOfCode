@@ -8,7 +8,7 @@ function file_numbers(filename)
     return numbers
 end
 
-" Solves Day1-1 "
+" Solves Day 1-1 "
 function two_numbers(filename="day1.input")
     NUMBER_TO_SUM_TO = 2020
     numbers = file_numbers(filename)
@@ -22,7 +22,7 @@ function two_numbers(filename="day1.input")
         end
     end
 end
-" Solves Day1-2 "
+" Solves Day 1-2 "
 function three_numbers(filename="day1.input")
     NUMBER_TO_SUM_TO = 2020
     numbers = file_numbers(filename)
