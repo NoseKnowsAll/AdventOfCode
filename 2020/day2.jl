@@ -26,11 +26,7 @@ end
 " Solves Day 2-1 "
 function total_valid_passwords1(filename="day2.input")
     pairs = password_pairs(filename)
-    valids = 0
-    for password in pairs
-        valids += is_valid_password1(password)
-    end
-    return valids
+    return count(is_valid_password1, pairs)
 end
 " Check if password is valid according to part 2 rules "
 function is_valid_password2(password::Password)
@@ -40,9 +36,5 @@ end
 " Solves Day 2-2 "
 function total_valid_passwords2(filename="day2.input")
     pairs = password_pairs(filename)
-    valids = 0
-    for password in pairs
-        valids += is_valid_password2(password)
-    end
-    return valids
+    return count(is_valid_password2, pairs)
 end
