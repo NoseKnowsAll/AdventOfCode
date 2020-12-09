@@ -32,19 +32,16 @@ end
 function contiguous_numbers(numbers, invalid_num)
     len = length(numbers)
     for index = 1:len-1
-        # List of numbers that should sum to `invalid_num`
-        sum_to_invalid = [numbers[index]]
         curr_sum = numbers[index]
         for offset = 1:len-index
             curr_sum += numbers[index+offset]
-            if curr_sum < invalid_num
-                push!(sum_to_invalid, numbers[index+offset])
-            elseif curr_sum == invalid_num
-                push!(sum_to_invalid, numbers[index+offset])
-                return sum_to_invalid
+            if curr_sum == invalid_num
+                return numbers[index:index+offset]
             else
-                # Our sum is too large - scrap list and move on
-                break
+                if curr_sum > invalid_num
+                    # Our sum is too large - scrap list and move on
+                    break
+                end
             end
         end
     end
