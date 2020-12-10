@@ -1,38 +1,36 @@
 include("utility.jl")
 
-" Read in the file and store as array of Sets with questions-answered-yes
-as the values. One user must answer yes for it to be included. "
-function read_answers(filename)
-    all_groups = enter_separated_read(filename)
-    all_answers = Set[]
+" Count questions-answered-yes. One user must answer yes for it to be included. "
+function count_union_answers(all_groups)
+    count = 0
     for group in all_groups
-        push!(all_answers, Set{Char}())
+        curr_group = Set{Char}()
         for line in group
-            union!(all_answers[end], Set{Char}(line))
+            union!(curr_group, Set{Char}(line))
         end
+        count += length(curr_group)
     end
-    return all_answers
+    return count
 end
-" Solves Day 6-1 "
+" Solve Day 6-1 "
 function sum_counts(filename="day6.input")
-    answers = read_answers(filename)
-    sum(length.(answers))
-end
-" Ready in the file and store as array of Sets with questions-answered-yes
-as the values. All users must answer yes for it to be included. "
-function strict_read_answers(filename)
     all_groups = enter_separated_read(filename)
-    all_answers = Set[]
-    for group in all_groups
-        push!(all_answers, Set{Char}("abcdefghijklmnopqrstuvwxyz"))
-        for line in group
-            intersect!(all_answers[end], Set{Char}(line))
-        end
-    end
-    return all_answers
+    count_union_answers(all_groups)
 end
-" Solves Day 6-2 "
+" Count questions-answered-yes. All users must answer yes for it to be included. "
+function count_intersect_answers(all_groups)
+    count = 0
+    for group in all_groups
+        curr_group = Set{Char}("abcdefghijklmnopqrstuvwxyz")
+        for line in group
+            intersect!(curr_group, Set{Char}(line))
+        end
+        count += length(curr_group)
+    end
+    return count
+end
+" Solve Day 6-2 "
 function strict_sum_counts(filename="day6.input")
-    answers = strict_read_answers(filename)
-    sum(length.(answers))
+    all_groups = enter_separated_read(filename)
+    count_intersect_answers(all_groups)
 end
