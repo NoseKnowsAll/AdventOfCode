@@ -75,7 +75,7 @@ function advance(map, all_neighbors, new_visibility)
     new_map = deepcopy(map)
     converged = true
     TOLERANCE = new_visibility ? 5 : 4
-    for loc in eachindex(view(map,1:size(map,1),1:size(map,2)))
+    for loc in eachindex(map)
         if map[loc] != FLOOR
             occupied_neighbors = 0
             for neighbor in all_neighbors[loc]
