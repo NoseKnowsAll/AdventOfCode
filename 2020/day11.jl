@@ -1,0 +1,117 @@
+const OCCUPIED = 2
+const EMPTY    = 1
+const FLOOR    = 0
+" Read seat_map from specified filename "
+function read_seat_map(filename)
+    len = countlines(filename)
+    width = length(readline(filename))
+    map = Array{Int,2}(undef, len, width)
+    function char2int(char)
+        if char == '#'
+            return OCCUPIED
+        elseif char == 'L'
+            return EMPTY
+        elseif char == '.'
+            return FLOOR
+        else
+            error("INVALID CHAR!")
+        end
+    end
+    for (i,line) in enumerate(readlines(filename))
+        map[i,:] = char2int.(collect(line))
+    end
+    return map
+end
+" Test for neighbors in the given direction specified by i_off,j_off from tuple
+loc. If new_visibility, then explore all the way to edge of map and find
+first seat. Otherwise, just consider adjacent neighbor. "
+function check_direction!(neighbors, tuple, map, new_visibility, i_off, j_off)
+    MAX_DISTANCE_AWAY = new_visibility ? size(map,2) : 1
+    for i = 1:MAX_DISTANCE_AWAY
+        tentative_neighbor = CartesianIndex(tuple[1]-i_off*i,tuple[2]-j_off*i)
+        if !checkbounds(Bool, map, tentative_neighbor)
+            return
+        end
+        if map[tentative_neighbor] != FLOOR
+            push!(neighbors, tentative_neighbor)
+            return
+        end
+    end
+end
+" Update neighbors to contain all non-floor neighbors of `loc` "
+function get_neighbors!(neighbors, loc, map, new_visibility)
+    tuple = Tuple(loc)
+    i_off = -1; j_off = -1
+    check_direction!(neighbors, tuple, map, new_visibility, i_off, j_off)
+    i_off = -1; j_off = 0
+    check_direction!(neighbors, tuple, map, new_visibility, i_off, j_off)
+    i_off = -1; j_off = +1
+    check_direction!(neighbors, tuple, map, new_visibility, i_off, j_off)
+    i_off = 0; j_off = -1
+    check_direction!(neighbors, tuple, map, new_visibility, i_off, j_off)
+    i_off = 0; j_off = +1
+    check_direction!(neighbors, tuple, map, new_visibility, i_off, j_off)
+    i_off = +1; j_off = -1
+    check_direction!(neighbors, tuple, map, new_visibility, i_off, j_off)
+    i_off = +1; j_off = 0
+    check_direction!(neighbors, tuple, map, new_visibility, i_off, j_off)
+    i_off = +1; j_off = +1
+    check_direction!(neighbors, tuple, map, new_visibility, i_off, j_off)
+    return neighbors
+end
+" Precompute all neighbors in all_neighbors array for performance purposes "
+function compute_all_neighbors(map, new_visibility)
+    all_neighbors = Array{Array{CartesianIndex,1},2}(undef,size(map)...)
+    for loc in eachindex(view(map,1:size(map,1),1:size(map,2)))
+        if map[loc] != FLOOR
+            all_neighbors[loc] = CartesianIndex[]
+            get_neighbors!(all_neighbors[loc], loc, map, new_visibility)
+        end
+    end
+    return all_neighbors
+end
+" Advance the map one step according to seating rules "
+function advance(map, all_neighbors, new_visibility)
+    new_map = deepcopy(map)
+    converged = true
+    TOLERANCE = new_visibility ? 5 : 4
+    for loc in eachindex(view(map,1:size(map,1),1:size(map,2)))
+        if map[loc] != FLOOR
+            occupied_neighbors = 0
+            for neighbor in all_neighbors[loc]
+                if map[neighbor] == OCCUPIED
+                    occupied_neighbors += 1
+                end
+            end
+            if map[loc] == EMPTY && occupied_neighbors == 0
+                new_map[loc] = OCCUPIED
+                converged = false
+            elseif map[loc] == OCCUPIED && occupied_neighbors >= TOLERANCE
+                new_map[loc] = EMPTY
+                converged = false
+            end
+        end
+    end
+    return new_map, converged
+end
+" Keep iterating in time until map reaches steady state "
+function converge_to_steady_state(map, new_visibility=false)
+    converged = false
+    all_neighbors = compute_all_neighbors(map, new_visibility)
+    while !converged
+        map, converged = advance(map, all_neighbors, new_visibility)
+    end
+    return map
+end
+" Solve Day 11-1 "
+function seats_occupied(filename="day11.input")
+    map = read_seat_map(filename)
+    map = converge_to_steady_state(map)
+    count(x->x==OCCUPIED, map)
+end
+" Solve Day 11-2 "
+function seats_occupied_new_visibility(filename="day11.input")
+    map = read_seat_map(filename)
+    map = converge_to_steady_state(map, true)
+    count(x->x==OCCUPIED, map)
+end
