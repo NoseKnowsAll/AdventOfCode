@@ -22,13 +22,13 @@ function read_seat_map(filename)
     end
     return map
 end
-" Test for neighbors in the given direction specified by i_off,j_off from tuple
-loc. If new_visibility, then explore all the way to edge of map and find
+" Test for neighbors in the given direction specified by `off` from `loc`.
+If new_visibility, then explore all the way to edge of map and find
 first seat. Otherwise, just consider adjacent neighbor. "
-function check_direction!(neighbors, tuple, map, new_visibility, i_off, j_off)
+function check_direction!(neighbors, loc, map, new_visibility, off)
     MAX_DISTANCE_AWAY = new_visibility ? size(map,2) : 1
     for i = 1:MAX_DISTANCE_AWAY
-        tentative_neighbor = CartesianIndex(tuple[1]-i_off*i,tuple[2]-j_off*i)
+        tentative_neighbor = loc+i*off
         if !checkbounds(Bool, map, tentative_neighbor)
             return
         end
@@ -40,29 +40,18 @@ function check_direction!(neighbors, tuple, map, new_visibility, i_off, j_off)
 end
 " Update neighbors to contain all non-floor neighbors of `loc` "
 function get_neighbors!(neighbors, loc, map, new_visibility)
-    tuple = Tuple(loc)
-    i_off = -1; j_off = -1
-    check_direction!(neighbors, tuple, map, new_visibility, i_off, j_off)
-    i_off = -1; j_off = 0
-    check_direction!(neighbors, tuple, map, new_visibility, i_off, j_off)
-    i_off = -1; j_off = +1
-    check_direction!(neighbors, tuple, map, new_visibility, i_off, j_off)
-    i_off = 0; j_off = -1
-    check_direction!(neighbors, tuple, map, new_visibility, i_off, j_off)
-    i_off = 0; j_off = +1
-    check_direction!(neighbors, tuple, map, new_visibility, i_off, j_off)
-    i_off = +1; j_off = -1
-    check_direction!(neighbors, tuple, map, new_visibility, i_off, j_off)
-    i_off = +1; j_off = 0
-    check_direction!(neighbors, tuple, map, new_visibility, i_off, j_off)
-    i_off = +1; j_off = +1
-    check_direction!(neighbors, tuple, map, new_visibility, i_off, j_off)
+    origin = CartesianIndex(zeros(Int,ndims(map))...)
+    for off in CartesianIndices(ntuple(x->UnitRange(-1:1), ndims(map)))
+        if !(off == origin)
+            check_direction!(neighbors, loc, map, new_visibility, off)
+        end
+    end
     return neighbors
 end
 " Precompute all neighbors in all_neighbors array for performance purposes "
 function compute_all_neighbors(map, new_visibility)
-    all_neighbors = Array{Array{CartesianIndex,1},2}(undef,size(map)...)
-    for loc in eachindex(view(map,1:size(map,1),1:size(map,2)))
+    all_neighbors = Array{Array{CartesianIndex,1},ndims(map)}(undef,size(map)...)
+    for loc in CartesianIndices(map)
         if map[loc] != FLOOR
             all_neighbors[loc] = CartesianIndex[]
             get_neighbors!(all_neighbors[loc], loc, map, new_visibility)
