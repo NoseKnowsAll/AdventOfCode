@@ -37,7 +37,9 @@ function get_neighbors!(neighbors, loc, cube)
     end
     return neighbors
 end
-" Precompute all neighbors in all_neighbors array for performance purposes "
+" Precompute all neighbors in all_neighbors array for performance purposes.
+Useful for advancing across many time steps with cubes that have few dimensions.
+Otherwise it is best to simply recompute neighbors every iteration. "
 function compute_all_neighbors(cube)
     all_neighbors = Array{Array{CartesianIndex,1},ndims(cube)}(undef,size(cube)...)
     for loc in CartesianIndices(cube)
@@ -47,11 +49,13 @@ function compute_all_neighbors(cube)
     return all_neighbors
 end
 " Advance cube one time step according to automata rules and return next cube "
-function advance(cube, all_neighbors)
+function advance(cube)
     new_cube = deepcopy(cube)
-    for loc in eachindex(cube)
+    for loc in CartesianIndices(cube)
         active_neighbors = 0
-        for neighbor in all_neighbors[loc]
+        neighbors = CartesianIndex[]
+        get_neighbors!(neighbors, loc, cube)
+        for neighbor in neighbors
             if cube[neighbor] == ACTIVE
                 active_neighbors += 1
             end
@@ -67,9 +71,10 @@ function advance(cube, all_neighbors)
 end
 " Advance the cube NCYCLES iterations and return the active hypercubes "
 function run_cycles(cube, NCYCLES)
-    all_neighbors = compute_all_neighbors(cube)
+    # For large dimensions this unnecessary memory allocation slows performance
+    #all_neighbors = compute_all_neighbors(cube)
     for i = 1:NCYCLES
-        cube = advance(cube, all_neighbors)
+        cube = advance(cube)
     end
     sum(cube)
 end
