@@ -49,13 +49,11 @@ function compute_all_neighbors(cube)
     return all_neighbors
 end
 " Advance cube one time step according to automata rules and return next cube "
-function advance(cube)
+function advance(cube, all_neighbors)
     new_cube = deepcopy(cube)
     for loc in CartesianIndices(cube)
         active_neighbors = 0
-        neighbors = CartesianIndex[]
-        get_neighbors!(neighbors, loc, cube)
-        for neighbor in neighbors
+        for neighbor in all_neighbors[loc]
             if cube[neighbor] == ACTIVE
                 active_neighbors += 1
             end
@@ -72,9 +70,9 @@ end
 " Advance the cube NCYCLES iterations and return the active hypercubes "
 function run_cycles(cube, NCYCLES)
     # For large dimensions this unnecessary memory allocation slows performance
-    #all_neighbors = compute_all_neighbors(cube)
+    all_neighbors = compute_all_neighbors(cube)
     for i = 1:NCYCLES
-        cube = advance(cube)
+        cube = advance(cube, all_neighbors)
     end
     sum(cube)
 end
