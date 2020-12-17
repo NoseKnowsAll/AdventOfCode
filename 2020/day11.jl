@@ -66,12 +66,7 @@ function advance(map, all_neighbors, new_visibility)
     TOLERANCE = new_visibility ? 5 : 4
     for loc in eachindex(map)
         if map[loc] != FLOOR
-            occupied_neighbors = 0
-            for neighbor in all_neighbors[loc]
-                if map[neighbor] == OCCUPIED
-                    occupied_neighbors += 1
-                end
-            end
+            occupied_neighbors = count(x->map[x] == OCCUPIED, all_neighbors[loc])
             if map[loc] == EMPTY && occupied_neighbors == 0
                 new_map[loc] = OCCUPIED
                 converged = false

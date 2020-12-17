@@ -19,7 +19,7 @@ function read_2d_slice(filename)
     end
     return slice
 end
-" Test for adjacent neighbor in the given direction specified by `off` from `loc`. "
+" Test for adjacent neighbor in the given direction specified by `off` from `loc` "
 function check_direction!(neighbors, loc, cube, off)
     tentative_neighbor = loc+off
     if !checkbounds(Bool, cube, tentative_neighbor)
@@ -52,12 +52,7 @@ end
 function advance(cube, all_neighbors)
     new_cube = deepcopy(cube)
     for loc in CartesianIndices(cube)
-        active_neighbors = 0
-        for neighbor in all_neighbors[loc]
-            if cube[neighbor] == ACTIVE
-                active_neighbors += 1
-            end
-        end
+        active_neighbors = count(x->cube[x] == ACTIVE, all_neighbors[loc])
         # Rules for cellular automata advancement
         if cube[loc] == INACTIVE && active_neighbors == 3
             new_cube[loc] = ACTIVE
