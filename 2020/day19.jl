@@ -102,7 +102,6 @@ end
 function modify_rules_for_loop!(all_rules, messages)
     max_message_length = maximum(length.(messages))
     RULE_TO_MODIFY = 8
-    println(all_rules[RULE_TO_MODIFY])
     rule_to_explore = all_rules[RULE_TO_MODIFY].subrules[1][1]
     options = collect_rule_options(rule_to_explore, all_rules)
     min_length = minimum(length.(options))
@@ -112,10 +111,8 @@ function modify_rules_for_loop!(all_rules, messages)
     for repetition = 2:max_repetitions
         pushfirst!(all_rules[RULE_TO_MODIFY].subrules, fill(rule_to_explore,repetition))
     end
-    println(all_rules[RULE_TO_MODIFY])
 
     RULE_TO_MODIFY = 11
-    println(all_rules[RULE_TO_MODIFY])
     rules_to_explore = all_rules[RULE_TO_MODIFY].subrules[1]
     min_length = 0
     for rule in rules_to_explore
@@ -129,18 +126,80 @@ function modify_rules_for_loop!(all_rules, messages)
         new_subrule = cat(fill(rules_to_explore[1],repetition), fill(rules_to_explore[2],repetition); dims=1)
         pushfirst!(all_rules[RULE_TO_MODIFY].subrules, new_subrule)
     end
-    println(all_rules[RULE_TO_MODIFY])
+end
+" Compute block length of `BUILDING_BLOCK_RULES` and assert all blocks are this length "
+function get_block_length(BUILDING_BLOCK_RULES, all_rules)
+    options = collect_rule_options(BUILDING_BLOCK_RULES[1], all_rules)
+    BLOCK_LENGTH = length(options[1])
+    # Sanity check - all options must be the same length
+    for option in options
+        @assert BLOCK_LENGTH == length(option) "$option not the correct length!"
+    end
+    options = collect_rule_options(BUILDING_BLOCK_RULES[2], all_rules)
+    for option in options
+        @assert BLOCK_LENGTH == length(option) "$option not the correct length!"
+    end
+    return BLOCK_LENGTH
+end
+" Attempt to split message cleanly into blocks of `BLOCK_LENGTH`. Return
+whether this was possible as well as the blocks message was split into "
+function split_into_blocks(message, BLOCK_LENGTH, BUILDING_BLOCK_RULES, all_rules)
+    num_blocks = length(message)/BLOCK_LENGTH
+    if num_blocks != ceil(Int, num_blocks)
+        # Can't be valid if message cannot be divided evenly into blocks
+        return false, nothing
+    else
+        num_blocks = Int(num_blocks)
+        blocks = zeros(Int, num_blocks)
+        satisfies = false
+        for i = 1:num_blocks
+            start=1+BLOCK_LENGTH*(i-1)
+            msg_block = message[start:start+BLOCK_LENGTH-1]
+            satisfies = false
+            for rule in BUILDING_BLOCK_RULES
+                test, offset = satisfy_rule_id(msg_block, 1, rule, all_rules)
+                if test && offset-1 == BLOCK_LENGTH
+                    @assert !satisfies "$msg_block SATISFIED MORE THAN ONE BUILDING BLOCK RULE!"
+                    satisfies = true
+                    blocks[i] = rule
+                end
+            end
+            if !satisfies
+                break
+            end
+        end
+        return satisfies, blocks
+    end
+end
+" Return whether or not the list of blocks can separate exactly into given subrules "
+function fit_blocks_into_rule(blocks, subrules, all_rules)
+    for list1 in all_rules[subrules[1]].subrules
+        for list2 in all_rules[subrules[2]].subrules
+            if cat(list1, list2; dims=1) == blocks
+                return true
+            end
+        end
+    end
+    return false
 end
 " Solve Day 19-2 "
 function satisfy_rule_0_loop(filename="day19.input")
     all_rules, messages = read_rules(filename)
+    RULE_0 = [8, 11]
+    @assert all_rules[0].subrules == [RULE_0] "ASSUMES RULE 0: 8 11"
+    BUILDING_BLOCK_RULES = [42, 31]
+    @assert all_rules[8].subrules == [[42]] "ASSUMES RULE 8: 42"
+    @assert all_rules[11].subrules == [[42, 31]] "ASSUMES RULE 11: 42 31"
+    BLOCK_LENGTH = get_block_length(BUILDING_BLOCK_RULES, all_rules)
     modify_rules_for_loop!(all_rules, messages)
-    RULE_TO_SATISFY = 0
+
     count = 0
     for message in messages
-        satisfies, offset = satisfy_rule_id(message, 1, RULE_TO_SATISFY, all_rules)
-        if satisfies && offset-1 == length(message)
-            count += 1
+        valid_split, blocks = split_into_blocks(message, BLOCK_LENGTH, BUILDING_BLOCK_RULES, all_rules)
+        if valid_split # All blocks fit exactly one rule
+            if fit_blocks_into_rule(blocks, RULE_0, all_rules)
+                count += 1
+            end
         end
     end
     return count
