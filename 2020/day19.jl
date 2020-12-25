@@ -12,13 +12,13 @@ end
 " Read filename and interpret into list of rules and list of messages "
 function read_rules(filename)
     all_groups = enter_separated_read(filename)
-    all_rules = Rule[]
+    all_rules = Dict{Int,Rule}()
     for rule in all_groups[1]
         split1 = split(rule, ": ")
         rule_id = parse(Int, split1[1])
         if split1[2][1] == '\"' # Leaf Rule - only one character
             curr_rule = LeafRule(rule_id, split1[2][2])
-            push!(all_rules, curr_rule)
+            all_rules[rule_id] = curr_rule
         else # Composite Rule - options of subrules
             split2 = split(split1[2], " | ")
             subrules = Vector{Int}[]
@@ -26,11 +26,10 @@ function read_rules(filename)
                 options = parse.(Int, split(sub_rules, " "))
                 push!(subrules, options)
             end
-            curr_rules = CompositeRule(rule_id, subrules)
-            push!(all_rules, curr_rules)
+            curr_rule = CompositeRule(rule_id, subrules)
+            all_rules[rule_id] = curr_rule
         end
     end
-    sort!(all_rules, by=x->x.ID)
     return all_rules, all_groups[2]
 end
 " Check whether a given message at a specified offset satisfies a specific rule.
@@ -47,7 +46,7 @@ function satisfy_rule_id(message, offset, rule_ID, all_rules)
             satisfies_rules = true
             offset_so_far = offset
             for rule in consecutive_rules
-                satisfy, offset_so_far = satisfy_rule_id(message, offset_so_far, rule+1, all_rules) # 1-INDEXED
+                satisfy, offset_so_far = satisfy_rule_id(message, offset_so_far, rule, all_rules)
                 if !satisfy
                     satisfies_rules = false
                     break
@@ -78,7 +77,7 @@ function collect_rule_options(rule_ID, all_rules)
         for consecutive_rules in all_rules[rule_ID].subrules
             curr_options = [""]
             for rule in consecutive_rules
-                curr_options = combine_options(curr_options, collect_rule_options(rule+1, all_rules)) # 1-INDEXED
+                curr_options = combine_options(curr_options, collect_rule_options(rule, all_rules))
             end
             append!(all_options, curr_options)
         end
@@ -91,22 +90,54 @@ function satisfy_rule_0(filename="day19.input")
     RULE_TO_SATISFY = 0
     count = 0
     for message in messages
-        satisfies, offset = satisfy_rule_id(message, 1, RULE_TO_SATISFY+1, all_rules) # 1-INDEXED
+        satisfies, offset = satisfy_rule_id(message, 1, RULE_TO_SATISFY, all_rules)
         if satisfies && offset-1 == length(message)
             count += 1
         end
     end
     return count
 end
+" Modify the rules to represent loop without explicitly defining a loop "
+function modify_rules_for_loop!(all_rules, messages)
+    max_message_length = maximum(length.(messages))
+    RULE_TO_MODIFY = 8
+    println(all_rules[RULE_TO_MODIFY])
+    rule_to_explore = all_rules[RULE_TO_MODIFY].subrules[1][1]
+    options = collect_rule_options(rule_to_explore, all_rules)
+    min_length = minimum(length.(options))
+    max_repetitions = ceil(Int, max_message_length/min_length)
+    # Old rule 8: 42
+    # New rule 8: 42 | 42 42 | 42 42 42 ... max possible times
+    for repetition = 2:max_repetitions
+        push!(all_rules[RULE_TO_MODIFY].subrules, fill(rule_to_explore,repetition))
+    end
+    println(all_rules[RULE_TO_MODIFY])
+
+    RULE_TO_MODIFY = 11
+    println(all_rules[RULE_TO_MODIFY])
+    rules_to_explore = all_rules[RULE_TO_MODIFY].subrules[1]
+    min_length = 0
+    for rule in rules_to_explore
+        options = collect_rule_options(rule, all_rules)
+        min_length += minimum(length.(options))
+    end
+    max_repetitions = ceil(Int, max_message_length/min_length)
+    # Old rule 11: 42 31
+    # New rule 11: 42 31 | 42 42 31 31 | 42 42 42 31 31 31 ...
+    for repetition = 2:max_repetitions
+        new_subrule = cat(fill(rules_to_explore[1],repetition), fill(rules_to_explore[2],repetition); dims=1)
+        push!(all_rules[RULE_TO_MODIFY].subrules, new_subrule)
+    end
+    println(all_rules[RULE_TO_MODIFY])
+end
 " Solve Day 19-2 "
-function satisfy_rule_0_loop(filename="day19part2.input")
+function satisfy_rule_0_loop(filename="day19.input")
     all_rules, messages = read_rules(filename)
+    modify_rules_for_loop!(all_rules, messages)
     RULE_TO_SATISFY = 0
     count = 0
     for message in messages
-        #println(message)
-        satisfies, offset = satisfy_rule_id(message, 1, RULE_TO_SATISFY+1, all_rules) # 1-INDEXED
-        #println(offset-1)
+        satisfies, offset = satisfy_rule_id(message, 1, RULE_TO_SATISFY, all_rules)
         if satisfies && offset-1 == length(message)
             count += 1
         end
