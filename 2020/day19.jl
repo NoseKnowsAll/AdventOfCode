@@ -35,7 +35,7 @@ end
 " Check whether a given message at a specified offset satisfies a specific rule.
 Also return the new offset after applying the given rule."
 function satisfy_rule_id(message, offset, rule_ID, all_rules)
-    #println("off: $offset, rule: $(rule_ID-1)")
+    #println("off: $offset, rule: $(rule_ID)")
     if offset > length(message)
         return false, offset
     end
@@ -53,6 +53,7 @@ function satisfy_rule_id(message, offset, rule_ID, all_rules)
                 end
             end
             if satisfies_rules
+                #println("rules: $(consecutive_rules) satisfied $offset-$offset_so_far")
                 return satisfies_rules, offset_so_far
             end
         end
@@ -109,7 +110,7 @@ function modify_rules_for_loop!(all_rules, messages)
     # Old rule 8: 42
     # New rule 8: 42 | 42 42 | 42 42 42 ... max possible times
     for repetition = 2:max_repetitions
-        push!(all_rules[RULE_TO_MODIFY].subrules, fill(rule_to_explore,repetition))
+        pushfirst!(all_rules[RULE_TO_MODIFY].subrules, fill(rule_to_explore,repetition))
     end
     println(all_rules[RULE_TO_MODIFY])
 
@@ -126,7 +127,7 @@ function modify_rules_for_loop!(all_rules, messages)
     # New rule 11: 42 31 | 42 42 31 31 | 42 42 42 31 31 31 ...
     for repetition = 2:max_repetitions
         new_subrule = cat(fill(rules_to_explore[1],repetition), fill(rules_to_explore[2],repetition); dims=1)
-        push!(all_rules[RULE_TO_MODIFY].subrules, new_subrule)
+        pushfirst!(all_rules[RULE_TO_MODIFY].subrules, new_subrule)
     end
     println(all_rules[RULE_TO_MODIFY])
 end
