@@ -47,7 +47,7 @@ function update_bot_inventory!(droid::Droid, program::ASCII.IntCode.Program)
     for string in all_strings
         println(string)
         m = match(r"^- (\w+( \w+)*)$", string)
-        if m != nothing
+        if !isnothing(m)
             push!(droid.inventory, m[1])
         end
     end
